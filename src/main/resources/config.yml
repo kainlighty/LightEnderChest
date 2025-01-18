@@ -1,0 +1,19 @@
+config-version: 1.0
+
+debug: true
+
+language: RUSSIAN
+
+inventory:
+  is-default: true
+  blocked-item: RED_STAINED_GLASS_PANE
+
+database:
+  # SQLite or MySQL
+  storage: SQLite
+  host: localhost
+  base: lightcutter
+  user: admin
+  password: admin
+  pool-size: 2
+  caching: true

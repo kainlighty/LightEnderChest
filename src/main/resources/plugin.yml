@@ -1,0 +1,32 @@
+main: ru.kainlight.lightenderchest.Main
+
+name: LightEnderChest
+version: ${version}
+
+authors: [ kainlight ]
+website: https://github.com/kainlighty
+
+api-version: '1.17'
+prefix: LightEnderChest
+
+depend: [ Vault ]
+softdepend: [ PlayerPoints, PlaceholderAPI ]
+loadbefore: [ Vault ]
+
+libraries:
+  - org.jetbrains.kotlin:kotlin-stdlib:${kotlinVersion}
+  - com.zaxxer:HikariCP:${hikariCPVersion}
+  - net.kyori:adventure-api:${adventureVersion}
+  - net.kyori:adventure-text-minimessage:${adventureVersion}
+  - net.kyori:adventure-platform-bukkit:${adventureBukkitVersion}
+  - com.mysql:mysql-connector-j:${mysqlVersion}
+
+commands:
+  lightenderchest:
+    permission: lightenterchest.*
+    aliases:
+      - lec
+
+permissions:
+  lightenterchest.*:
+    default: op
