@@ -24,7 +24,6 @@
 ![data1](https://github.com/user-attachments/assets/bb0d4895-883e-495a-86c0-09337ab4ba1e)
 ![data2](https://github.com/user-attachments/assets/be8a2f27-c116-4123-9a6e-7c6ad9465594)
 
-
 ---
 
 ## › Commands and Permissions
