@@ -1,7 +1,7 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    kotlin("jvm") version "2.1.0"
+    kotlin("jvm") version "2.1.10"
     id("com.gradleup.shadow").version("9.0.0-beta4")
 }
 
@@ -13,6 +13,7 @@ val adventureVersion = "4.18.0"
 val adventureBukkitVersion = "4.3.4"
 val hikariCPVersion = "6.2.1"
 val mysqlConnectorVersion = "9.1.0"
+val sqliteVersion = "3.48.0.0"
 
 repositories {
     mavenCentral()
@@ -23,15 +24,17 @@ repositories {
 dependencies {
     compileOnly(kotlin("stdlib"))
 
+    implementation("com.github.ben-manes.caffeine:caffeine:3.2.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
+
     compileOnly("io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT")
 
     compileOnly("net.kyori:adventure-api:$adventureVersion")
     compileOnly("net.kyori:adventure-text-minimessage:$adventureVersion")
-    compileOnly("net.kyori:adventure-platform-bukkit:$adventureBukkitVersion")
     compileOnly("com.zaxxer:HikariCP:$hikariCPVersion")
 
-    implementation("com.j256.ormlite:ormlite-jdbc:6.1")
     compileOnly("com.mysql:mysql-connector-j:$mysqlConnectorVersion")
+    compileOnly("org.xerial:sqlite-jdbc:$sqliteVersion")
 
     implementation(files(
         "C:/Users/danny/IdeaProjects/.Kotlin/.private/LightLibrary/bukkit/build/libs/LightLibraryBukkit-PUBLIC-1.0.jar"
@@ -57,7 +60,8 @@ tasks.processResources {
         "adventureVersion" to adventureVersion,
         "adventureBukkitVersion" to adventureBukkitVersion,
         "hikariCPVersion" to hikariCPVersion,
-        "mysqlVersion" to mysqlConnectorVersion
+        "mysqlVersion" to mysqlConnectorVersion,
+        "sqliteVersion" to sqliteVersion
     )
     inputs.properties(props)
     filteringCharset = "UTF-8"
@@ -74,13 +78,21 @@ tasks.named<ShadowJar>("shadowJar") {
     // Исключения и переименование пакетов
     exclude("META-INF/maven/**",
             "META-INF/INFO_BIN",
-            "META-INF/INFO_SRC"
+            "META-INF/INFO_SRC",
+            "kotlin/**"
     )
     mergeServiceFiles()
 
     val shadedPath = "ru.kainlight.lightenderchest.shaded"
     relocate("ru.kainlight.lightlibrary", "$shadedPath.lightlibrary")
-    relocate("com.j256.ormlite", "$shadedPath.ormlite-jdbc")
+
+    relocate("kotlinx", "$shadedPath.kotlinx")
+    relocate("_COROUTINE", "$shadedPath.kotlinx._COROUTINE")
+    relocate("com.google", "$shadedPath.com.google")
+    relocate("com.github", "$shadedPath.com.github")
+    relocate("org.jspecify", "$shadedPath.org.jspecify")
+    relocate("org.intellij", "$shadedPath.org.intellij")
+    relocate("org.jetbrains", "$shadedPath.org.jetbrains")
 }
 
 tasks.register("server") {
@@ -104,35 +116,6 @@ tasks.register("server") {
             into(buildDir)
         }
 
-        println("Shadow JAR успешно скопирован в: $buildDir")
-    }
-}
-
-tasks.register("servers") {
-    group = "build"
-    description = "Копирует готовый JAR из shadowJar в серверные папки"
-
-    val buildDirs = listOf<String>(
-        "C:/testservers/1.21.3/plugins"
-    )
-
-    dependsOn("shadowJar") // Используем результат shadowJar
-
-    doLast {
-        val shadowJarTask = tasks.named<ShadowJar>("shadowJar").get()
-        val outputJar = shadowJarTask.archiveFile.get().asFile
-
-        if (!outputJar.exists()) {
-            throw GradleException("Сборка shadowJar завершилась неудачно: JAR файл не найден!")
-        }
-
-        copy {
-            from(outputJar)
-
-            for (dir in buildDirs) {
-                into(dir)
-                println("Shadow JAR успешно скопирован в: $dir")
-            }
-        }
+        println("Shadow JAR successfully copied in: $buildDir")
     }
 }
