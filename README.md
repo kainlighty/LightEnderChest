@@ -26,7 +26,7 @@
 
 ---
 
-## › Commands and Permissions
+### › Commands and Permissions
 | Command                             | Description                         | Permission                          |
 |-------------------------------------|-------------------------------------|-------------------------------------|
 | lightenderchest                     | Open an enderchest                  | lightenderchest.use                 |
