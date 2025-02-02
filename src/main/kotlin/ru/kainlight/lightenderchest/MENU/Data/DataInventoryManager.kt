@@ -179,7 +179,6 @@ class DataInventoryManager(val plugin: Main, val player: Player) {
                         return
                     }
 
-                    // TODO: Протестировать
                     ClickType.MIDDLE -> { // teleport to last enderchest
                         val player = plugin.server.getPlayerExact(username)
                         val chest = ChestListener.getChest(player)

@@ -71,11 +71,10 @@ tasks.processResources {
 }
 
 tasks.named<ShadowJar>("shadowJar") {
-    // Настройки для Shadow JAR
     archiveBaseName.set(project.name)
     archiveFileName.set("${project.name}-${project.version}.jar")
 
-    // Исключения и переименование пакетов
+    // Исключения
     exclude("META-INF/maven/**",
             "META-INF/INFO_BIN",
             "META-INF/INFO_SRC",
@@ -83,6 +82,7 @@ tasks.named<ShadowJar>("shadowJar") {
     )
     mergeServiceFiles()
 
+    // Переименование пакетов
     val shadedPath = "ru.kainlight.lightenderchest.shaded"
     relocate("ru.kainlight.lightlibrary", "$shadedPath.lightlibrary")
 
@@ -93,29 +93,4 @@ tasks.named<ShadowJar>("shadowJar") {
     relocate("org.jspecify", "$shadedPath.org.jspecify")
     relocate("org.intellij", "$shadedPath.org.intellij")
     relocate("org.jetbrains", "$shadedPath.org.jetbrains")
-}
-
-tasks.register("server") {
-    group = "build"
-    description = "Копирует готовый JAR из shadowJar в серверную папку"
-
-    val buildDir = "C:/testservers/1.21.3/plugins"
-
-    dependsOn("shadowJar") // Используем результат shadowJar
-
-    doLast {
-        val shadowJarTask = tasks.named<ShadowJar>("shadowJar").get()
-        val outputJar = shadowJarTask.archiveFile.get().asFile
-
-        if (!outputJar.exists()) {
-            throw GradleException("Сборка shadowJar завершилась неудачно: JAR файл не найден!")
-        }
-
-        copy {
-            from(outputJar)
-            into(buildDir)
-        }
-
-        println("Shadow JAR successfully copied in: $buildDir")
-    }
 }
