@@ -1,7 +1,5 @@
 # LightEnderChest
 
----
-
 ### › Features
 
 - Purchase of slots
@@ -12,20 +10,20 @@
 - Support for MiniMessage and Legacy colors
 - Full database caching for increased performance.
 
----
-
 ### › Abilities
 
 - Purchase of slots in someone else's inventory _(including without withdrawing funds from the balance)_
 - Prohibition on buying slots in someone else's inventory
 - Inventory editing is prohibited.
 
----
-
 ### › Screenshots
 
+1. Inventory:
+![enderchest](https://github.com/user-attachments/assets/4c69b385-73b4-418d-826b-9e4398bb765f)
+2. Data inventory:
+![data1](https://github.com/user-attachments/assets/bb0d4895-883e-495a-86c0-09337ab4ba1e)
+![data2](https://github.com/user-attachments/assets/be8a2f27-c116-4123-9a6e-7c6ad9465594)
 
-#### TODO:
 
 ---
 
