@@ -25,6 +25,7 @@
 ![data2](https://github.com/user-attachments/assets/be8a2f27-c116-4123-9a6e-7c6ad9465594)
 
 ### › Commands and Permissions
+
 | Command                             | Description                         | Permission                          |
 |-------------------------------------|-------------------------------------|-------------------------------------|
 | lightenderchest                     | Open an enderchest                  | lightenderchest.use                 |
