@@ -1,3 +1,54 @@
-config-version: 1.0
+config-version: 1.0 # DON'T TOUCH ME
 
-reload: "Перезагружено"
+prefix: "<bold><light_purple>ENDERCHEST: <reset>"
+
+reload: "<green>Конфигурации успешно перезагружены"
+no-permissions: "У вас недостаточно права #permission# для выполнения этой команды"
+player-not-found: "Игрок <yellow>#username#<reset> не найден"
+
+help:
+  - ''
+  - '<light_purple>» /lightenderchest (<username>) <gray>— <white>Открыть эндер-сундук'
+  - '<light_purple>» /lightenderchest clear (<username>) <gray>— <white>Очистить эндер-сундук'
+  - '<light_purple>» /lightenderchest open <username> <gray>— <white>Открыть эндер-сундук игроку'
+  - '<light_purple>» /lightenderchest close <username> <gray>— <white>Закрыть эндер-сундук игроку'
+  - '<light_purple>» /lightenderchest reset <username> <gray>— <white>Сбросить эндер-сундук игрока'
+  - '<light_purple>» /lightenderchest cache data <gray>— <white>Открыть меню с данными из кеш'
+  - '<light_purple>» /lightenderchest cache refresh <gray>— <white>Обновить кеш из базы данных'
+  - '<light_purple>» /lightenderchest cache purge <gray>— <white>Удалить из кеша старые данные'
+  - '<light_purple>» /lightenderchest cache clear-online <gray>— <white>Очистить кеш для онлайн-игроков'
+  - '<light_purple>» /lightenderchest cache clear-offline <gray>— <white>Очистить кеш для оффлайн-игроков'
+  - '<light_purple>» /lightenderchest cache clear <gray>— <white>Очистить весь кеш'
+  - '<light_purple>» /lightenderchest reload <gray>— <white>Перезагрузить конфигурации'
+  - ''
+
+cache:
+  refresh: "#prefix# Кеш был обновлён из базы данных"
+  purge: "#prefix# Старые или неактуальные записи были удалены из кеша"
+  clear: "#prefix# Кеш успешно очищен"
+  chest-not-found: "#prefix# Игрок <yellow>#username# <white>не открывал инвентарь с помощью эндер-сундука"
+
+inventories:
+  offline: "#prefix# Игрок оффлайн. Вы не можете редактировать этот инвентарь"
+  not-found: "#prefix# У игрока <yellow>#username#<reset> нет инвентаря"
+  clear: "#prefix# Вы очистили свой инвентарь"
+  buy:
+    purchased: "#prefix# Вы купили <red>#slot# слот<reset> за <green>#price#$"
+    not-enough-money: "#prefix# Для покупки не хватает <green>#price#$"
+  admin:
+    no-access:
+      buy: "#prefix# Вам запрещено покупать слоты для игрока <yellow>#username#"
+      edit: "#prefix# Вы не можете редактировать инвентарь игрока <yellow>#username#"
+    view: "#prefix# Вы открыли инвентарь игрока <yellow>#username#"
+    open:
+      owner: "#prefix# Игрок <yellow>#username#<reset> открыл вам инвентарь"
+      viewer: "#prefix# Вы открыли инвентарь для #username#"
+    close:
+      owner: "#prefix# Игрок <yellow>#username#<reset> закрыл вам инвентарь"
+      viewer: "#prefix# Вы закрыли инвентарь для #username#"
+    clear:
+      owner: "#prefix# Игрок <yellow>#username#<reset> очистил вам инвентарь"
+      viewer: "#prefix# Вы очистили инвентарь для #username#"
+    reset:
+      owner: "#prefix# Игрок <yellow>#username#<reset> сбросил вам инвентарь"
+      viewer: "#prefix# Вы сбросили инвентарь для <yellow>#username#"

@@ -1,0 +1,54 @@
+config-version: 1.0 # DON'T TOUCH ME
+
+prefix: "<bold><light_purple>ENDERCHEST: <reset>"
+
+reload: "<green>Configurations reloaded successfully"
+no-permissions: "You do not have the #permission# permission to perform this command"
+player-not-found: "Player <yellow>#username#<reset> not found"
+
+help:
+  - ''
+  - '<light_purple>» /lightenderchest (<username>) <gray>— <white>Open an enderchest'
+  - '<light_purple>» /lightenderchest clear (<username>) <gray>— <white>Clear an enderchest'
+  - '<light_purple>» /lightenderchest open <username> <gray>— <white>Open the enderchest to the player'
+  - '<light_purple>» /lightenderchest close <username> <gray>— <white>Close the enderchest to the player'
+  - '<light_purple>» /lightenderchest reset <username> <gray>— <white>Reset the enderchest to the player'
+  - '<light_purple>» /lightenderchest cache data <gray>— <white>Open the cache data menu'
+  - '<light_purple>» /lightenderchest cache refresh <gray>— <white>Refresh the cache from the database'
+  - '<light_purple>» /lightenderchest cache purge <gray>— <white>Remove old data from the cache'
+  - '<light_purple>» /lightenderchest cache clear-online <gray>— <white>Clear the cache for online players'
+  - '<light_purple>» /lightenderchest cache clear-offline <gray>— <white>Clear the cache for offline players'
+  - '<light_purple>» /lightenderchest cache clear <gray>— <white>Clear the entire cache'
+  - '<light_purple>» /lightenderchest reload <gray>— <white>Reload all configurations'
+  - ''
+
+cache:
+  refresh: "#prefix# The cache has been refreshed from the database"
+  purge: "#prefix# Old or unused entries have been removed from the cache"
+  clear: "#prefix# The cache has been successfully cleared"
+  chest-not-found: "#prefix# The player <yellow>#username# <white>has not opened an ender chest through this system"
+
+inventories:
+  offline: "#prefix# The player is offline. You cannot edit this inventory"
+  not-found: "#prefix# The player <yellow>#username#<reset> does not have an inventory"
+  clear: "#prefix# You have cleared your inventory"
+  buy:
+    purchased: "#prefix# You bought <red>#slot# slot<reset> for <green>#price#$"
+    not-enough-money: "#prefix# You do not have enough money; you need an additional <green>#price#$"
+  admin:
+    no-access:
+      buy: "#prefix# You are not allowed to purchase slots for player <yellow>#username#"
+      edit: "#prefix# You cannot edit the inventory of player <yellow>#username#"
+    view: "#prefix# You opened the inventory of <yellow>#username#"
+    open:
+      owner: "#prefix# Player <yellow>#username#<reset> opened an inventory for you"
+      viewer: "#prefix# You opened an inventory for #username#"
+    close:
+      owner: "#prefix# Player <yellow>#username#<reset> closed your inventory"
+      viewer: "#prefix# You closed the inventory for #username#"
+    clear:
+      owner: "#prefix# Player <yellow>#username#<reset> cleared your inventory"
+      viewer: "#prefix# You cleared the inventory for #username#"
+    reset:
+      owner: "#prefix# Player <yellow>#username#<reset> reset your inventory"
+      viewer: "#prefix# You reset the inventory for <yellow>#username#"

@@ -1,19 +1,30 @@
-config-version: 1.0
+config-version: 1.0 # DON'T TOUCH ME
+debug: false
 
-debug: true
+language: ENGLISH
+economy: VAULT
+parse_mode: MINIMESSAGE
 
-language: RUSSIAN
-
-inventory:
-  is-default: true
-  blocked-item: RED_STAINED_GLASS_PANE
+command-aliases:
+  - 'ec'
+  - 'echest'
+  - 'ender'
+  - 'enderchest'
 
 database:
-  # SQLite or MySQL
-  storage: SQLite
-  host: localhost
-  base: lightcutter
-  user: admin
-  password: admin
-  pool-size: 2
-  caching: true
+  connection:
+    type: sqlite                # Тип базы данных: mysql / sqlite
+    host: localhost             # Хост базы данных
+    port: 3306                  # Порт
+    base: lightenderchest       # Имя базы данных
+    user: admin                 # Имя пользователя
+    password: admin             # Пароль пользователя
+  settings:
+    pool-size: 2                # Размер пула соединений
+    connection-timeout: 30000   # Тайм-аут получения соединения (в миллисекундах)
+    idle-timeout: 600000        # Время ожидания, пока соединение простаивает (в миллисекундах)
+    max-lifetime: 1800000       # Максимальное время жизни соединения (в миллисекундах)
+    minimum-idle: 2             # Минимальное количество соединений, которые остаются в пуле
+  cache:
+    maximum-size: 2000           # Максимальный размер кеша (в количестве записей)
+    expire: 4                    # Загрузка данных из кеша в базу данных и удаление старых данных (в часах)

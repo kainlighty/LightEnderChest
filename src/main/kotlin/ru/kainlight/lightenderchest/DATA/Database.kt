@@ -1,74 +1,133 @@
 package ru.kainlight.lightenderchest.DATA
 
+import com.github.benmanes.caffeine.cache.Caffeine
+import com.github.benmanes.caffeine.cache.LoadingCache
+import com.github.benmanes.caffeine.cache.RemovalCause
+import com.github.benmanes.caffeine.cache.stats.CacheStats
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import org.bukkit.Bukkit
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withContext
 import org.bukkit.configuration.ConfigurationSection
-import org.bukkit.entity.Player
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import org.bukkit.util.io.BukkitObjectInputStream
 import org.bukkit.util.io.BukkitObjectOutputStream
-import ru.kainlight.lightenderchest.DATA.EnderInventory.SavedInventory
+import ru.kainlight.lightenderchest.MENU.Ender.EnderInventory
+import ru.kainlight.lightenderchest.MENU.Ender.EnderInventoryHolder
+import ru.kainlight.lightenderchest.MENU.Ender.EnderInventoryManager
 import ru.kainlight.lightenderchest.Main
-import ru.kainlight.lightenderchest.UTILS.Debug
+import ru.kainlight.lightenderchest.info
+import ru.kainlight.lightenderchest.serve
+import ru.kainlight.lightenderchest.warning
+import ru.kainlight.lightlibrary.UTILS.IODispatcher
+import ru.kainlight.lightlibrary.UTILS.bukkitThread
+import ru.kainlight.lightlibrary.equalsIgnoreCase
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.IOException
 import java.sql.PreparedStatement
 import java.sql.ResultSet
-import java.util.Base64
+import java.util.*
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
-import java.util.logging.Level
+import java.util.concurrent.TimeUnit
 
 @Suppress("UNUSED")
 object Database {
 
-    private val dbConfig: ConfigurationSection = Main.instance.config.getConfigurationSection("database")!!
-    private val host: String = dbConfig.getString("host", "localhost")!!
-    private val port: Int = dbConfig.getInt("port", 3306)
-    private val base: String = dbConfig.getString("base", "lightcutter")!!
+    private val baseType: String = Main.instance.config.getString("database.connection.type") ?: "SQLite"
 
-    private var dataSource: HikariDataSource? = null
-    private val config: HikariConfig = HikariConfig()
+    private var hikariDataSource: HikariDataSource? = null
+    private val hikariConfig: HikariConfig = HikariConfig()
 
-    private val tableName = "players"
+    private const val tableName = "inventories"
 
-    private val cache: ConcurrentHashMap<String, SavedInventory> = ConcurrentHashMap()
-    private val caching: Boolean = dbConfig.getBoolean("caching", false)
+    private val inventoryCache: LoadingCache<String, EnderInventory> = Caffeine.newBuilder().recordStats()
+        .maximumSize(Main.instance.config.getLong("database.cache.maximum-size", 1000))
+        .expireAfterWrite(Main.instance.config.getLong("database.cache.expire", 4), TimeUnit.HOURS)
+        .removalListener { username: String?, inventory: EnderInventory?, cause: RemovalCause ->
+            if (!isConnected()) return@removalListener
+            if (inventory == null) return@removalListener
 
-    // ----------------------------------
-    // Подключение / отключение
+            info("Cache: Removal listener returned cause: $cause")
+            when (cause) {
+                RemovalCause.EXPLICIT, RemovalCause.REPLACED -> {
+                    inventory.closeInventoryForViewers()
+                    updateInventorySync(inventory)
+                }
+                RemovalCause.SIZE, RemovalCause.EXPIRED, RemovalCause.COLLECTED -> updateInventorySync(inventory)
+            }
+        }.build { username ->
+            // Загрузка инвентаря из базы данных или создание нового
+            fetchInventoryFromDatabase(username) ?: createAndInsertInventory(username, true)
+        }
+
+    //----------------------------------
+    // Configuration
     // ----------------------------------
 
     private fun configureDataSource(driverClassName: String, jdbcUrl: String, sqlite: Boolean = false) {
-        config.driverClassName = driverClassName
-        config.jdbcUrl = if (sqlite) {
-            "jdbc:sqlite://$jdbcUrl"
-        } else {
-            "$jdbcUrl$host:$port/$base"
-        }
-        config.username = dbConfig.getString("user", "root")!!
-        config.password = dbConfig.getString("password", "")!!
-        config.maximumPoolSize = dbConfig.getInt("pool-size", 2)
-        config.poolName = "LightEnterChest-Pool"
+        val connection: ConfigurationSection = Main.instance.config.getConfigurationSection("database.connection") !!
+        val settings: ConfigurationSection? = Main.instance.config.getConfigurationSection("database.settings")
 
-        dataSource = HikariDataSource(config)
+        hikariConfig.apply {
+            this.driverClassName = driverClassName
+            this.jdbcUrl = if (sqlite) "jdbc:sqlite://$jdbcUrl" else {
+                val host: String = connection.getString("host", "localhost") !!
+                val port: Int = connection.getInt("port", 3306)
+                val base: String = connection.getString("base", "lightenderchest") !!
+                "$jdbcUrl$host:$port/$base"
+            }
+
+            username = connection.getString("user", "root") !!
+            password = connection.getString("password", "") !!
+            poolName = "LightEnterChest-Pool"
+
+            settings?.let {
+                it.getInt("pool-size").takeIf { value -> value > 0 }?.let { value ->
+                    maximumPoolSize = value
+                }
+                it.getLong("connection-timeout").takeIf { value -> value > 0 }?.let { value ->
+                    connectionTimeout = value
+                }
+                it.getLong("idle-timeout").takeIf { value -> value > 0 }?.let { value ->
+                    idleTimeout = value
+                }
+                it.getLong("max-lifetime").takeIf { value -> value > 0 }?.let { value ->
+                    maxLifetime = value
+                }
+                it.getInt("minimum-idle").takeIf { value -> value >= 0 }?.let { value ->
+                    minimumIdle = value
+                }
+            }
+        }
+
+        hikariDataSource = HikariDataSource(hikariConfig)
     }
 
-    fun connect() {
-        when (dbConfig.getString("storage", "sqlite")!!.lowercase()) {
+    // ----------------------------------
+    // Connection and creation
+    // ----------------------------------
+
+    fun init() {
+        connect()
+        createTables()
+    }
+
+    private fun connect() {
+        when (baseType.lowercase()) {
             "mysql" -> configureDataSource("com.mysql.cj.jdbc.Driver", "jdbc:mysql://")
             "mariadb" -> configureDataSource("org.mariadb.jdbc.Driver", "jdbc:mariadb://")
             "sqlite" -> {
-                val dbFile = File(Main.instance.dataFolder, "$base.db")
-                if (!dbFile.exists()) {
-                    try {
+                val fileName: String = Main.instance.config.getString("database.connection.base", "lightenderchest") !!
+                val dbFile = File(Main.instance.dataFolder, "$fileName.db")
+                if (! dbFile.exists()) {
+                    runCatching {
                         dbFile.createNewFile()
-                    } catch (e: IOException) {
-                        Debug.log(e.message.toString(), Level.SEVERE)
+                    }.onFailure {
+                        it.printStackTrace()
                     }
                 }
                 configureDataSource("org.sqlite.JDBC", dbFile.absolutePath, true)
@@ -76,238 +135,286 @@ object Database {
         }
     }
 
-    fun disconnect() {
-        try {
-            if (isConnected()) {
-                dataSource?.close()
-            }
-        } catch (e: Exception) {
-            Debug.log(e.message.toString(), Level.SEVERE)
+    private fun reconnect() {
+        if (this.disconnect()) {
+            this.connect()
         }
     }
 
-    private fun isConnected(): Boolean =
-        dataSource != null && !(dataSource?.isClosed ?: true)
+    private fun isConnected(): Boolean = hikariDataSource != null && ! (hikariDataSource?.isClosed ?: true)
 
-    fun createTables(): Int {
+    fun disconnect(): Boolean {
+        try {
+            if (isConnected()) {
+                hikariDataSource?.close()
+                return hikariDataSource?.isClosed == true
+            } else return false
+        } catch (e: Exception) {
+            serve(e.message.toString())
+            return false
+        }
+    }
+
+    private fun createTables(): Int {
         return executeUpdate(
             """
             CREATE TABLE IF NOT EXISTS $tableName (
                 username VARCHAR(64) PRIMARY KEY,
                 opened_slots TEXT,
-                closed_slots TEXT,
                 inventory TEXT
             )
             """.trimIndent()
         )
     }
 
-    // ----------------------------------
-    // Асинхронные методы (публичные)
-    // ----------------------------------
+    private fun createAndInsertInventory(username: String, skipCache: Boolean = false): EnderInventory {
+        Main.instance.server.getPlayer(username)?.let { player ->
+            val inventory = EnderInventoryManager(player).createInventory(fillBlockedItems = true)
+            val newInventory = EnderInventory(username, inventory)
 
-    fun insertInventoryAsync(saved: SavedInventory): CompletableFuture<Int> {
-        return CompletableFuture.supplyAsync {
-            insertInventorySync(saved)
-        }
+            insertInventorySync(newInventory, skipCache)
+            return newInventory
+        } ?: throw NullPointerException("Player $username not found")
     }
 
-    fun removeInventoryAsync(username: String): CompletableFuture<Int> {
-        return CompletableFuture.supplyAsync {
+    // ----------------------------------
+    //? Asynchronously functions
+    // ----------------------------------
+
+    suspend fun insertInventory(inventory: EnderInventory?, skipCache: Boolean = false): Int =
+        withContext(IODispatcher) {
+            runCatching {
+                insertInventorySync(inventory, skipCache)
+            }.onFailure { e ->
+                serve("Couldn't insert player inventory for ${inventory?.username}\n${e.message}")
+            }.getOrDefault(0)
+        }
+
+    suspend fun removeInventory(username: String): Int = withContext(IODispatcher) {
+        runCatching {
             removeInventorySync(username)
-        }
+        }.onFailure { e ->
+            serve("Couldn't remove player inventory for $username\n${e.message}")
+        }.getOrDefault(0)
     }
 
-    fun updateInventoryAsync(saved: SavedInventory): CompletableFuture<Int> {
-        return CompletableFuture.supplyAsync {
-            updateInventorySync(saved)
+    suspend fun updateInventory(inventory: EnderInventory?, skipCache: Boolean = false): Int =
+        withContext(IODispatcher) {
+            runCatching {
+                updateInventorySync(inventory, skipCache)
+            }.onFailure { e ->
+                serve("Couldn't update player inventory for ${inventory?.username}\n${e.message}")
+            }.getOrDefault(0)
         }
-    }
 
-    fun hasInventoryAsync(username: String): CompletableFuture<Boolean> {
-        return CompletableFuture.supplyAsync {
+    suspend fun insertOrUpdateInventory(inventory: EnderInventory?, skipCache: Boolean = false): Int =
+        withContext(IODispatcher) {
+            runCatching {
+                insertOrUpdateInventorySync(inventory, skipCache)
+            }.onFailure { e ->
+                serve("Couldn't upsert player inventory for ${inventory?.username}\n${e.message}")
+            }.getOrDefault(0)
+        }
+
+    suspend fun hasInventory(username: String): Boolean = withContext(IODispatcher) {
+        runCatching {
             hasInventorySync(username)
-        }
+        }.onFailure { e ->
+            e.printStackTrace()
+            serve("Couldn't get player inventory for $username\n${e.message}")
+        }.getOrDefault(false)
     }
 
-    fun getInventoryAsync(username: String): CompletableFuture<SavedInventory?> {
-        return CompletableFuture.supplyAsync {
+    suspend fun getInventory(username: String): EnderInventory? = withContext(IODispatcher) {
+        runCatching {
             getInventorySync(username)
-        }
+        }.onFailure { e ->
+            serve("Couldn't get player inventory for $username\n${e.message}")
+        }.getOrNull()
     }
 
-    fun getInventoriesAsync(): CompletableFuture<List<SavedInventory>> {
-        return CompletableFuture.supplyAsync {
+    suspend fun getInventories(): List<EnderInventory> = withContext(IODispatcher) {
+        runCatching {
             getInventoriesSync()
-        }
+        }.onFailure { e ->
+            e.printStackTrace()
+        }.getOrDefault(emptyList())
     }
 
     // ----------------------------------
-    // Синхронные методы (приватные)
+    // ! Synchronized functions (don't use)
     // ----------------------------------
 
-    private fun insertInventorySync(saved: SavedInventory): Int {
-        val rowsAffected = executeUpdate(
-            """
-            INSERT INTO $tableName (username, opened_slots, closed_slots, inventory)
-            SELECT ?, ?, ?, ?
-            WHERE NOT EXISTS (
-                SELECT 1 FROM $tableName WHERE username = ?
-            )
-            """.trimIndent()
-        ) {
-            it.setString(1, saved.username)
-            it.setString(2, saved.openedSlots.joinToString(","))
-            it.setString(3, saved.closedSlots.joinToString(","))
-            it.setString(4, serializeInventory(saved.inventory))
-            it.setString(5, saved.username)
+    private fun insertOrUpdateInventorySync(inventory: EnderInventory?, skipCache: Boolean = false): Int {
+        if (inventory == null) {
+            serve("Inventory is null")
+            return 0
         }
 
-        if (caching && rowsAffected > 0) {
-            cache[saved.username] = saved
+        val username = inventory.username
+        val sql = if (baseType.equalsIgnoreCase("sqlite")) {
+            """
+            INSERT INTO $tableName (username, opened_slots, inventory)
+            VALUES (?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET 
+                opened_slots = excluded.opened_slots,
+                inventory = excluded.inventory
+            """.trimIndent()
+        } else {
+            """
+            INSERT INTO $tableName (username, opened_slots, inventory)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+                opened_slots = VALUES(opened_slots), 
+                inventory = VALUES(inventory)
+            """.trimIndent()
         }
-        return rowsAffected
+
+        val result = executeUpdate(sql) {
+            it.setString(1, username)
+            it.setString(2, inventory.openedSlots.joinToString(","))
+            it.setString(3, serializeInventory(inventory.inventory))
+        }
+
+        info("Inventory created or updated for $username. Cached: ${! skipCache}")
+
+        if (! skipCache) Cache.set(username, inventory)
+        return result
+    }
+
+    private fun insertInventorySync(inventory: EnderInventory?, skipCache: Boolean = false): Int {
+        if (inventory == null) return 0
+        val username = inventory.username
+        val sql = """
+                INSERT INTO $tableName (username, opened_slots, inventory)
+                SELECT ?, ?, ?
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM $tableName WHERE username = ?
+                )
+            """.trimIndent()
+        val result = executeUpdate(sql) {
+            it.setString(1, username)
+            it.setString(2, inventory.openedSlots.joinToString(","))
+            it.setString(3, serializeInventory(inventory.inventory))
+            it.setString(4, username)
+        }
+        if (! skipCache) {
+            Cache.set(username, inventory)
+        }
+        return result
     }
 
     private fun removeInventorySync(username: String): Int {
-        val rowsAffected = executeUpdate(
-            "DELETE FROM $tableName WHERE username = ?"
-        ) {
+        Main.instance.runTask {
+            Main.instance.server.getPlayer(username)?.let { player ->
+                val topInventory = player.openInventory.topInventory
+                val holder = topInventory.holder
+                if (holder is EnderInventoryHolder) {
+                    player.closeInventory()
+                    topInventory.viewers.forEach { it.closeInventory() }
+                }
+            }
+        }
+
+        val sql = "DELETE FROM $tableName WHERE username = ?"
+        val result = executeUpdate(sql) {
             it.setString(1, username)
         }
-        if (caching && rowsAffected > 0) {
-            cache.remove(username)
-        }
-        return rowsAffected
+        Cache.remove(username)
+        return result
     }
 
-    private fun updateInventorySync(saved: SavedInventory): Int {
-        val rowsAffected = executeUpdate(
-            """
+    private fun updateInventorySync(inventory: EnderInventory?, skipCache: Boolean = true): Int {
+        if (inventory == null) return 0
+        val username = inventory.username
+        val sql = """
             UPDATE $tableName 
-            SET opened_slots = ?, closed_slots = ?, inventory = ?
+            SET opened_slots = ?, inventory = ?
             WHERE username = ?
-            """.trimIndent()
-        ) {
-            it.setString(1, saved.openedSlots.joinToString(","))
-            it.setString(2, saved.closedSlots.joinToString(","))
-            it.setString(3, serializeInventory(saved.inventory))
-            it.setString(4, saved.username)
-        }
+        """.trimIndent()
 
-        if (caching && rowsAffected > 0) {
-            cache[saved.username] = saved
+        val result = executeUpdate(sql) {
+            it.setString(1, inventory.openedSlots.joinToString(","))
+            it.setString(2, serializeInventory(inventory.inventory))
+            it.setString(3, username)
         }
-        return rowsAffected
+        if (! skipCache) Cache.set(username, inventory)
+        return result
     }
 
     private fun hasInventorySync(username: String): Boolean {
-        return if (caching) {
-            cache.containsKey(username) || getInventorySync(username) != null
-        } else {
-            executeQuery(
-                "SELECT 1 FROM $tableName WHERE username = ?",
-                { it.setString(1, username) }
-            ) { true } != null
-        }
+        val sql = "SELECT 1 FROM $tableName WHERE username = ?"
+        return executeQuery(sql, { it.setString(1, username) }) { true } != null
     }
 
-    private fun getInventorySync(username: String): SavedInventory? {
-        return if (caching) {
-            cache[username] ?: fetchInventoryFromDatabase(username)?.also {
-                cache[username] = it
+    private fun getInventorySync(username: String): EnderInventory? {
+        return fetchInventoryFromDatabase(username)
+    }
+
+    private fun getInventoriesSync(): List<EnderInventory> {
+        return fetchAllInventoriesFromDatabase()
+    }
+
+    // ----------------------------------
+    // Fetching
+    // ----------------------------------
+
+    private fun fetchInventoryFromDatabase(username: String): EnderInventory? {
+        return executeQuery("SELECT * FROM $tableName WHERE username = ?", {
+            it.setString(1, username)
+        }) { rs ->
+            // Курсор уже установлен на строку результата, если она есть
+            val dbUsername = rs.getString("username") ?: username
+            val openedSlotsStr = rs.getString("opened_slots") ?: ""
+            val inventoryData = rs.getString("inventory")
+
+            val openedSlots = openedSlotsStr.split(",")
+                .mapNotNull { it.toIntOrNull() }
+                .toMutableSet()
+
+            val inventory = if (! inventoryData.isNullOrBlank()) {
+                deserializeInventory(dbUsername, inventoryData)
+            } else {
+                serve("Inventory for $username not found")
+                null
             }
-        } else {
-            fetchInventoryFromDatabase(username)
+
+            if (inventory == null) {
+                serve("Failed to deserialize inventory for player $username")
+                null
+            } else {
+                info("Request for fetching $username inventory. Result: OK")
+                EnderInventory(
+                    username = dbUsername,
+                    openedSlots = openedSlots,
+                    inventory = inventory
+                )
+            }
         }
     }
 
-    private fun getInventoriesSync(): List<SavedInventory> {
-        return if (caching) {
-            cache.values.toList()
-        } else {
-            fetchAllInventoriesFromDatabase()
-        }
-    }
-
-    // ----------------------------------
-    // Вспомогательные методы
-    // ----------------------------------
-
-    private fun fetchInventoryFromDatabase(username: String?): SavedInventory? {
-        return executeQuery(
-            "SELECT * FROM $tableName WHERE username = ?",
-            { it.setString(1, username) }
-        ) { rs ->
-            SavedInventory(
-                username = rs.getString("username"),
-                openedSlots = rs.getString("opened_slots")?.split(",")
-                    ?.mapNotNull { it.toIntOrNull() }
-                    ?.toMutableSet() ?: mutableSetOf(),
-                closedSlots = rs.getString("closed_slots")?.split(",")
-                    ?.mapNotNull { it.toIntOrNull() }
-                    ?.toMutableList() ?: mutableListOf(),
-                inventory = deserializeInventory(username, rs.getString("inventory"))!!
-            )
-        }
-    }
-
-    private fun fetchAllInventoriesFromDatabase(): List<SavedInventory> {
-        return executeQuery(
-            "SELECT * FROM $tableName"
-        ) { rs ->
-            val list = mutableListOf<SavedInventory>()
+    private fun fetchAllInventoriesFromDatabase(): List<EnderInventory> {
+        return executeQuery("SELECT * FROM $tableName") { rs ->
+            val list = mutableListOf<EnderInventory>()
 
             do {
-                list += SavedInventory(
+                list += EnderInventory(
                     username = rs.getString("username"),
                     openedSlots = rs.getString("opened_slots")?.split(",")
                         ?.mapNotNull { it.toIntOrNull() }
                         ?.toMutableSet() ?: mutableSetOf(),
-                    closedSlots = rs.getString("closed_slots")?.split(",")
-                        ?.mapNotNull { it.toIntOrNull() }
-                        ?.toMutableList() ?: mutableListOf(),
-                    inventory = deserializeInventory(null, rs.getString("inventory"))!!
+                    inventory = deserializeInventory("0", rs.getString("inventory")) !!
                 )
             } while (rs.next())
+            info("Request for fetching all inventory's. Result: ${list.size} values")
             list
         } ?: emptyList()
     }
 
-    // Универсальный метод для SELECT
-    private fun <T> executeQuery(
-        sql: String,
-        setter: (PreparedStatement) -> Unit = {},
-        mapper: (ResultSet) -> T?
-    ): T? {
-        dataSource?.connection.use { connection ->
-            connection?.prepareStatement(sql).use { statement ->
-                setter(statement!!)
-                statement.executeQuery().use { resultSet ->
-                    return if (resultSet.next()) mapper(resultSet) else null
-                }
-            }
-        }
-        return null
-    }
-
-    // Универсальный метод для INSERT/UPDATE/DELETE
-    private fun executeUpdate(
-        sql: String,
-        setter: (PreparedStatement) -> Unit = {}
-    ): Int {
-        dataSource?.connection.use { connection ->
-            connection?.prepareStatement(sql).use { statement ->
-                setter(statement!!)
-                return statement.executeUpdate()
-            }
-        }
-        return 0
-    }
-
     // ----------------------------------
-    // Сериализация
+    // ! Serialization and deserialization
     // ----------------------------------
+
     private fun serializeInventory(inventory: Inventory?): String {
         if (inventory == null) return ""
 
@@ -323,7 +430,7 @@ object Database {
         }
     }
 
-    private fun deserializeInventory(username: String?, data: String?): Inventory? {
+    private fun deserializeInventory(owner: String?, data: String?): Inventory? {
         if (data.isNullOrBlank()) return null
 
         val bytes = Base64.getDecoder().decode(data)
@@ -331,17 +438,194 @@ object Database {
             BukkitObjectInputStream(byteIn).use { dataIn ->
                 val size = dataIn.readInt()
                 val items = arrayOfNulls<ItemStack>(size)
+
                 for (i in 0 until size) {
                     items[i] = dataIn.readObject() as ItemStack?
                 }
-                // Если у тебя всегда 54 слота
-                // val inventory = Bukkit.createInventory(null, 54, "Ender-Menu")
-                // иначе используем size
-                val inventory = EnderInventory.createInventory(Main.instance.server.getPlayer(username!!))
-                inventory.contents = items
-                return inventory
+
+                if (owner == null) {
+                    val inventory = EnderInventoryManager(null).createInventory(fillBlockedItems = false)
+                    inventory.contents = items
+
+                    warning("Deserialize inventory error — owner is null. Loading inventory without owner.")
+
+                    return inventory
+                }
+
+                Main.instance.server.getPlayer(owner)?.let { player ->
+                    val inventory = EnderInventoryManager(player).createInventory(fillBlockedItems = false)
+                    inventory.contents = items
+
+                    info("Deserialize inventory for ${player.name} is successfully")
+
+                    return inventory
+                } ?: run {
+                    val inventory = EnderInventoryManager(null).createInventory(fillBlockedItems = false)
+                    inventory.contents = items
+
+                    warning("Deserialize inventory error — player $owner is null. Loading inventory without owner.")
+
+                    return inventory
+                }
             }
         }
+    }
+
+    // ----------------------------------
+    // $ Кеш
+    // ----------------------------------
+
+    object Cache {
+        fun set(username: String, inventory: EnderInventory) {
+            inventoryCache.put(username, inventory)
+            info("Cache: Inventory for $username has been cached")
+        }
+
+        fun remove(username: String) {
+            inventoryCache.invalidate(username)
+            info("Cache: Inventory for $username has been uncached")
+        }
+
+        fun purge() {
+            inventoryCache.cleanUp()
+            info("Cache: Old inventory's has been purged")
+        }
+
+        fun clear() {
+            inventoryCache.invalidateAll()
+            info("Cache: All inventory's has been uncached")
+        }
+
+        fun clearOfflines() {
+            val map: List<String> = Main.instance.server.offlinePlayers
+                .filter { ! it.isConnected || ! it.isOnline }
+                .mapNotNull { it.name }
+            inventoryCache.invalidateAll(map)
+
+            info("Cache: Offline inventory's has been uncached")
+        }
+
+        fun clearOnlines() {
+            val map: List<String> = Main.instance.server.onlinePlayers.mapNotNull { it.name }
+            inventoryCache.invalidateAll(map)
+            info("Cache: Online inventory's has been uncached")
+        }
+
+        fun getOrCreateInventory(username: String): EnderInventory {
+            info("Cache: Create or get inventory for $username")
+            return inventoryCache.get(username)
+        }
+
+        fun getInventory(username: String): EnderInventory? {
+            info("Cache: Getting inventory for $username")
+            return inventoryCache.getIfPresent(username)
+        }
+
+        fun hasInventory(username: String): Boolean {
+            info("Cache: Request to verify the existence of an inventory for $username")
+            return inventoryCache.getIfPresent(username) != null
+        }
+
+        fun getInventories(): MutableCollection<EnderInventory> {
+            info("Cache: Getting all inventory's")
+            return inventoryCache.asMap().values
+        }
+
+        fun getStats(): CacheStats {
+            return inventoryCache.stats()
+        }
+
+        fun getOnlineInventories(): MutableCollection<EnderInventory> {
+            val map = Main.instance.server.onlinePlayers.mapNotNull { it.name }
+            return inventoryCache.getAllPresent(map).values
+        }
+
+        fun refreshAsync(username: String): CompletableFuture<EnderInventory> {
+            info("Cache: Asynchronously request for refreshed for $username")
+            return inventoryCache.refresh(username).exceptionally {
+                it.printStackTrace()
+                null
+            }
+        }
+
+        fun refreshAllAsync(): CompletableFuture<Map<String, EnderInventory>> {
+            info("Cache: Synchronously request for refreshed all inventory's")
+            val map = Main.instance.server.onlinePlayers.mapNotNull { it.name }
+                .zip(Main.instance.server.offlinePlayers.mapNotNull { it.name }).toMap()
+            return inventoryCache.refreshAll(map.values).exceptionally {
+                it.printStackTrace()
+                null
+            }
+        }
+
+        fun refreshOnlineInventoriesAsync(): CompletableFuture<Map<String, EnderInventory>> {
+            info("Cache: Asynchronously request for refreshed online inventory's")
+            val map = Main.instance.server.onlinePlayers.mapNotNull { it.name }
+            return inventoryCache.refreshAll(map).exceptionally {
+                it.printStackTrace()
+                null
+            }
+        }
+
+        /**
+         ** При выключении сервера оставить флаг `closeInventories` в `false`, иначе всё ляжет нахрен
+         **/
+        suspend fun saveToDatabase(closeInventories: Boolean = false): List<Int> = supervisorScope {
+            val inventories = getInventories() // Предполагается, что эта функция возвращает список инвентарей
+
+            info("Cache: Asynchronously request for saving all inventory's in database")
+            if (inventories.isEmpty()) return@supervisorScope emptyList<Int>()
+            warning("Cache: Asynchronously request for saving all inventory's in database: Inventory's is empty")
+
+            if (closeInventories) {
+                // Закрываем все инвентари на основном потоке
+                bukkitThread(inventories) {
+                    warning("Cache: Synchronously request for closing all inventory's")
+                    it.forEach {
+                        it.closeInventoryForViewers()
+                    }
+                }
+            }
+
+            // Асинхронно сохраняем данные в базу данных
+            val jobs = inventories.map { inventory ->
+                async(IODispatcher) {
+                    info("The data from the cache has been saved to the database")
+                    insertInventory(inventory, true)
+                }
+            }
+
+            // Ждём завершения всех операций сохранения
+            jobs.awaitAll()
+        }
+    }
+
+    // ----------------------------------
+    // ? Запросы
+    // ----------------------------------
+
+    // SELECT
+    private fun <T> executeQuery(sql: String, setter: (PreparedStatement) -> Unit = {}, mapper: (ResultSet) -> T?): T? {
+        hikariDataSource?.connection?.use { connection ->
+            connection.prepareStatement(sql).use { statement ->
+                setter(statement)
+                statement.executeQuery().use { resultSet ->
+                    return if (resultSet.next()) mapper(resultSet) else null
+                }
+            }
+        }
+        return null
+    }
+
+    // INSERT/UPDATE/DELETE
+    private fun executeUpdate(sql: String, setter: (PreparedStatement) -> Unit = {}): Int {
+        hikariDataSource?.connection?.use { connection ->
+            connection.prepareStatement(sql).use { statement ->
+                setter(statement)
+                return statement.executeUpdate()
+            }
+        }
+        return 0
     }
 }
 

@@ -11,22 +11,105 @@ prefix: LightEnderChest
 
 depend: [ Vault ]
 softdepend: [ PlayerPoints, PlaceholderAPI ]
-loadbefore: [ Vault ]
+loadbefore: [ Vault, PlayerPoints ]
 
 libraries:
   - org.jetbrains.kotlin:kotlin-stdlib:${kotlinVersion}
   - com.zaxxer:HikariCP:${hikariCPVersion}
-  - net.kyori:adventure-api:${adventureVersion}
-  - net.kyori:adventure-text-minimessage:${adventureVersion}
-  - net.kyori:adventure-platform-bukkit:${adventureBukkitVersion}
   - com.mysql:mysql-connector-j:${mysqlVersion}
+  - org.xerial:sqlite-jdbc:${sqliteVersion}
 
 commands:
   lightenderchest:
-    permission: lightenterchest.*
+    permission: lightenderchest.use
     aliases:
       - lec
+      - ec
+      - enderchest
+      - ender
+      - echest
 
+default-permission: op
 permissions:
-  lightenterchest.*:
-    default: op
+  # Главная команда
+  lightenderchest.use:
+    default: true
+    description: "Allows opening or clearing own ender-chest"
+  lightenderchest.clear:
+    default: true
+    description: "Allows clearing own ender-chest"
+
+  # Разрешение на /lightenderchest reload
+  lightenderchest.reload:
+    description: "Access to reload configurations"
+
+  # Разрешение на команды 'cache'
+  lightenderchest.cache.*:
+    description: "Base node for cache commands"
+    children:
+      lightenderchest.cache.data: true
+      lightenderchest.cache.refresh: true
+      lightenderchest.cache.purge: true
+      lightenderchest.cache.clear-offline: true
+      lightenderchest.cache.clear-online: true
+      lightenderchest.cache.clear: true
+
+  lightenderchest.cache.data:
+    description: "Access to data menu"
+
+  lightenderchest.cache.refresh:
+    description: "Access to cache refreshing"
+
+  lightenderchest.cache.purge:
+    description: "Access to purge old cache data"
+
+  lightenderchest.cache.clear-offline:
+    description: "Access to clear cache data for offline players"
+
+  lightenderchest.cache.clear-online:
+    description: "Access to clear cache data for online players"
+
+  lightenderchest.cache.clear:
+    description: "Access to clear full cache data"
+
+  # Разрешения для админских действий
+  lightenderchest.admin.*:
+    description: "Full admin node for LightEnderChest"
+    children:
+      lightenderchest.admin.view: true
+      lightenderchest.admin.open: true
+      lightenderchest.admin.close: true
+      lightenderchest.admin.clear: true
+      lightenderchest.admin.reset: true
+      lightenderchest.admin.edit: true
+      lightenderchest.admin.buy: true
+
+  lightenderchest.admin.view:
+    description: "Allows view other player's ender-chest"
+
+  lightenderchest.admin.open:
+    description: "Allows opening other player's ender-chest"
+
+  lightenderchest.admin.close:
+    description: "Allows closing other player's ender-chest"
+
+  lightenderchest.admin.clear:
+    description: "Allows clearing other player's ender-chest"
+
+  lightenderchest.admin.reset:
+    description: "Allows resetting other player's ender-chest"
+
+  lightenderchest.admin.edit:
+    description: "Editing other inventories"
+
+  lightenderchest.admin.buy:
+    description: "Buy slots in other inventories"
+
+  lightenderchest.*:
+    description: "Full access"
+    children:
+      lightenderchest.use: true
+      lightenderchest.clear: true
+      lightenderchest.cache.*: true
+      lightenderchest.admin.*: true
+      lightenderchest.reload: true
