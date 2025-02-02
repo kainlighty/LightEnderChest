@@ -3,11 +3,11 @@
 ### › Features
 
 - Purchase of slots
-- Custom and customizable enderchest
-- Setting the price for each slot _or_ specify the **price-step** for slots without a price
+- Customizable enderchest
+- Setting the price for each slot _or_ specify the `price-step` for slots without a price
 - Inventory management and statistics in the data menu
-- Support for Vault and PlayerPoints
-- Support for MiniMessage and Legacy colors
+- Support for **Vault** and **PlayerPoints**
+- Support for **MiniMessage** and **Legacy** colors
 - Full database caching for increased performance.
 
 ### › Abilities
