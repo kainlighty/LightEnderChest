@@ -54,5 +54,6 @@
 |----------------------------|------------------------------------|
 | lightenderchest.admin.edit | Edit other enderchests             |
 | lightenderchest.admin.buy  | Buying slots in other enderchests  |
+| lightenderchest.cache.*    | Full access to cache management    |
 | lightenderchest.admin.*    | Complete management of enderchests |
 | lightenderchest.*          | Full access                        |
