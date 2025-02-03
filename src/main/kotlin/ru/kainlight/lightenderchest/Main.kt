@@ -3,6 +3,7 @@ package ru.kainlight.lightenderchest
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.bukkit.OfflinePlayer
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import ru.kainlight.lightenderchest.COMMANDS.EnderCommand
@@ -115,6 +116,10 @@ fun CommandSender.prefixMessage(text: String?, vararg replace: Pair<String, Any?
     this.multiMessage(text.replace("#prefix#", MESSAGE_PREFIX), replace = replace)
 
     return this
+}
+
+fun OfflinePlayer?.isNull(): Boolean {
+    return if(this == null || !this.hasPlayedBefore()) true else false
 }
 
 fun info(text: Any) {

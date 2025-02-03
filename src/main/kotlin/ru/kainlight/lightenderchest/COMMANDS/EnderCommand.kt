@@ -1,6 +1,7 @@
 package ru.kainlight.lightenderchest.COMMANDS
 
 import kotlinx.coroutines.launch
+import org.bukkit.OfflinePlayer
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -13,10 +14,10 @@ import ru.kainlight.lightenderchest.MENU.Ender.EnderInventory
 import ru.kainlight.lightenderchest.MENU.Ender.EnderInventoryManager
 import ru.kainlight.lightenderchest.Main
 import ru.kainlight.lightenderchest.info
+import ru.kainlight.lightenderchest.isNull
 import ru.kainlight.lightenderchest.prefixMessage
 import ru.kainlight.lightlibrary.UTILS.IOScope
 import ru.kainlight.lightlibrary.UTILS.IOScopeLaunch
-import ru.kainlight.lightlibrary.UTILS.bukkitThread
 import ru.kainlight.lightlibrary.UTILS.bukkitThreadNotNull
 import ru.kainlight.lightlibrary.equalsIgnoreCase
 import ru.kainlight.lightlibrary.getPlayer
@@ -77,27 +78,23 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                 if (! sender.hasEnderPermission("admin.view")) return true
                 sender.getPlayer()?.let { player ->
                     val username = action
+
                     val replacedUsername = arrayOf("#username#" to username)
 
-                    Database.Cache.getInventory(username)?.let { inventory ->
+                    if(plugin.server.getOfflinePlayer(username).isNull()) {
+                        plugin.getMessagesConfig().getString("player-not-found")?.let {
+                            player.prefixMessage(it, replace = replacedUsername)
+                        }
+                        return true
+                    }
+
+                    Database.Cache.getOrCreateInventory(username).let { inventory ->
                         player.openInventory(inventory.inventory)
                         inventoriesSection.getString("admin.view").let {
                             sender.prefixMessage(it, replace = replacedUsername)
                         }
-                    } ?: run {
-                        IOScope.launch {
-                            Database.getInventory(username)?.bukkitThread { inventory ->
-                                player.openInventory(inventory.inventory)
-                                inventoriesSection.getString("admin.view").let {
-                                    sender.prefixMessage(it, replace = replacedUsername)
-                                }
-                            } ?: run {
-                                inventoriesSection.getString("not-found").let {
-                                    sender.prefixMessage(it, replace = replacedUsername)
-                                }
-                            }
-                        }
                     }
+                    return true
                 } ?: run {
                     sender.message("<red>This command can only be used by a player")
                 }
@@ -191,7 +188,7 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                 repeat(74) {
                     i++
                     val name = "test$i"
-                    Database.Cache.set(name, EnderInventory(name, EnderInventoryManager(sender).createInventory()))
+                    Database.Cache.set(name, EnderInventory(name, EnderInventoryManager(name).createInventory()))
                 }
                 return true
             }
@@ -200,10 +197,10 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
     }
 
     private fun handleAdminCommands(username: String, sender: CommandSender, action: String, inventoriesSection: ConfigurationSection): Boolean {
-        val player = plugin.server.getPlayerExact(username)
+        val offlinePlayer: OfflinePlayer? = plugin.server.getOfflinePlayer(username)
         val replacedUsername = arrayOf("#username#" to username)
 
-        if (player == null) {
+        if (offlinePlayer.isNull()) {
             plugin.getMessagesConfig().getString("player-not-found").let {
                 sender.prefixMessage(it, replace = replacedUsername)
             }
@@ -223,22 +220,34 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
         when (action) {
             "open" -> {
                 if (! sender.hasEnderPermission("admin.open")) return true
+                if(!offlinePlayer!!.isOnline) {
+                    plugin.getMessagesConfig().getString("player-not-found").let {
+                        sender.prefixMessage(it, replace = replacedUsername)
+                    }
+                    return true
+                }
                 savedInventory.openInventory()
-                adminCommandMessage(adminSection, "open", player, sender)
+                adminCommandMessage(adminSection, "open", offlinePlayer, sender)
                 return true
             }
 
             "close" -> {
                 if (! sender.hasEnderPermission("admin.close")) return true
+                if(!offlinePlayer!!.isOnline) {
+                    plugin.getMessagesConfig().getString("player-not-found").let {
+                        sender.prefixMessage(it, replace = replacedUsername)
+                    }
+                    return true
+                }
                 savedInventory.closeInventory()
-                adminCommandMessage(adminSection, "close", player, sender)
+                adminCommandMessage(adminSection, "close", offlinePlayer, sender)
                 return true
             }
 
             "clear" -> {
                 if (! sender.hasEnderPermission("admin.clear")) return true
                 savedInventory.clearInventory()
-                adminCommandMessage(adminSection, "clear", player, sender)
+                adminCommandMessage(adminSection, "clear", offlinePlayer!!, sender)
                 return true
             }
 
@@ -246,7 +255,7 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                 if (! sender.hasEnderPermission("admin.reset")) return true
                 savedInventory.resetInventory().IOScopeLaunch(code = {
                     if(it > 0) it.bukkitThreadNotNull {
-                        adminCommandMessage(adminSection, "reset", player, sender)
+                        adminCommandMessage(adminSection, "reset", offlinePlayer!!, sender)
                     }
                 })
 
@@ -259,12 +268,12 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
     /**
      * Сообщения при операциях "open", "close", "clear", "reset" с другим игроком
      */
-    private fun adminCommandMessage(section: ConfigurationSection, category: String, player: Player, sender: CommandSender) {
+    private fun adminCommandMessage(section: ConfigurationSection, category: String, offlinePlayer: OfflinePlayer, sender: CommandSender) {
         section.getString("$category.owner")?.let {
-            player.prefixMessage(it.replace("#username#", sender.name))
+            if(offlinePlayer.isOnline) offlinePlayer.player!!.prefixMessage(it.replace("#username#", sender.name))
         }
         section.getString("$category.viewer")?.let {
-            sender.prefixMessage(it.replace("#username#", player.name))
+            sender.prefixMessage(it.replace("#username#", offlinePlayer.name!!))
         }
     }
 

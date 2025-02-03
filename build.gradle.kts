@@ -2,13 +2,13 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     kotlin("jvm") version "2.1.10"
-    id("com.gradleup.shadow").version("9.0.0-beta4")
+    id("com.gradleup.shadow").version("9.0.0-beta7")
 }
 
 group = "ru.kainlight.lightenderchest"
-version = "1.0"
+version = "1.0.1"
 
-val kotlinVersion = "2.0.20"
+val kotlinVersion = "2.1.10"
 val adventureVersion = "4.18.0"
 val adventureBukkitVersion = "4.3.4"
 val hikariCPVersion = "6.2.1"

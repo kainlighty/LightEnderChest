@@ -17,7 +17,7 @@ import ru.kainlight.lightlibrary.BUILDERS.ItemBuilder
 import ru.kainlight.lightlibrary.UTILS.IOScope
 import ru.kainlight.lightlibrary.sound
 
-class EnderInventoryManager(private val player: Player?) {
+class EnderInventoryManager(private val username: String) {
 
     fun createInventory(fillBlockedItems: Boolean = true): Inventory {
         val holder = EnderInventoryHolder()
@@ -43,25 +43,17 @@ class EnderInventoryManager(private val player: Player?) {
     }
 
     private fun clickInventoryEvent(event: InventoryClickEvent) {
-        val whoClicked = event.whoClicked as? Player ?: return
+        val viewer = event.whoClicked as? Player ?: return
         val inventoriesConfig = Main.instance.getMessagesConfig().getConfigurationSection("inventories") !!
 
-        val inventoryOwner = if (player != null) player else {
-            inventoriesConfig.getString("offline")?.let {
-                whoClicked.prefixMessage(it)
-            }
-            event.isCancelled = true
-            return
-        }
-
-        val inventoryOwnerName = inventoryOwner.name
-        val hasViewer = whoClicked != inventoryOwner
+        val inventoryOwnerName= username
+        val hasViewer = viewer.name != inventoryOwnerName
 
         val replacedInventoryOwnerName = arrayOf("#username#" to inventoryOwnerName)
 
-        if (hasViewer && !(whoClicked.hasPermission("lightenderchest.admin.edit") || whoClicked.hasPermission("lightenderchest.admin.edit.$inventoryOwnerName"))) {
+        if (hasViewer && !(viewer.hasPermission("lightenderchest.admin.edit") || viewer.hasPermission("lightenderchest.admin.edit.$inventoryOwnerName"))) {
             inventoriesConfig.getString("admin.no-access.edit")?.let {
-                whoClicked.prefixMessage(it, replace = replacedInventoryOwnerName)
+                viewer.prefixMessage(it, replace = replacedInventoryOwnerName)
             }
             event.isCancelled = true
             return
@@ -76,13 +68,13 @@ class EnderInventoryManager(private val player: Player?) {
 
         if (hasViewer && !hasBlockedItem && event.isShiftClick && event.isRightClick) {
             event.isCancelled = true
-            if(whoClicked.hasPermission("lightenderchest.admin.refund")) {
-                whoClicked.inventorySound("refund")
-                whoClicked.moveOrDropItemByCloseSlot(currentItem)
+            if(viewer.hasPermission("lightenderchest.admin.refund")) {
+                viewer.inventorySound("refund")
+                viewer.moveOrDropItemByCloseSlot(currentItem)
                 enderInventory.closeSlot(slot)
             } else {
                 Main.instance.getMessagesConfig().getString("no-permissions")?.replace("#permission#", "lightenderchest.admin.refund")?.let {
-                    whoClicked.prefixMessage(it)
+                    viewer.prefixMessage(it)
                 }
             }
             return
@@ -90,63 +82,60 @@ class EnderInventoryManager(private val player: Player?) {
 
         if(currentItem == null) return
         if (!hasBlockedItem) return
-        if (!player.itemOnCursor.isEmpty || event.isShiftClick || !event.isLeftClick) {
+        if (!viewer.itemOnCursor.isEmpty || event.isShiftClick || !event.isLeftClick) {
             event.isCancelled = true
             return
         }
 
-        val isFree = hasViewer && whoClicked.hasPermission("lightenderchest.admin.buy")
+        val isFree = hasViewer && viewer.hasPermission("lightenderchest.admin.buy")
 
         if (!isFree && hasViewer) {
             event.isCancelled = true
-            whoClicked.inventorySound("failed")
+            viewer.inventorySound("failed")
             inventoriesConfig.getString("admin.no-access.buy")?.let {
-                whoClicked.prefixMessage(it, replace = replacedInventoryOwnerName)
+                viewer.prefixMessage(it, replace = replacedInventoryOwnerName)
             }
             return
         }
 
         val economyManager = Main.instance.economyManager
-        val balance = economyManager.getBalance(whoClicked)
+        val balance = economyManager.getBalance(viewer)
 
         val slotCost = economyManager.calculateCostForSlot(slot)
         val doubleSlotCost = slotCost.toDouble()
 
         event.isCancelled = true
-        if(balance >= doubleSlotCost || (isFree && whoClicked != inventoryOwner)) {
-            if (economyManager.withdraw(whoClicked, slot, slotCost, isFree)) {
+        if(balance >= doubleSlotCost || isFree) {
+            if (economyManager.withdraw(viewer, slot, slotCost, isFree)) {
                 if (enderInventory.openSlot(slot)) {
-                    whoClicked.inventorySound("successfully")
+                    viewer.inventorySound("successfully")
                     return
                 }
             }
-            whoClicked.inventorySound("failed")
+            viewer.inventorySound("failed")
             return
         } else {
-            whoClicked.inventorySound("failed")
+            viewer.inventorySound("failed")
             inventoriesConfig.getString("buy.not-enough-money")?.let {
                 val calculateNeedMoney = doubleSlotCost - balance
                 val isPrecision = Main.instance.enderChestConfig.getConfig().getInt("precision") <= 0
                 val needToBuy = if(isPrecision) calculateNeedMoney.toInt() else calculateNeedMoney.toDouble()
-                whoClicked.prefixMessage(it.replace("#price#", needToBuy.toString()))
+                viewer.prefixMessage(it.replace("#price#", needToBuy.toString()))
             }
             return
         }
     }
 
     private fun closeInventoryEvent(event: InventoryCloseEvent) {
-        val owner = this.player ?: return
+        val owner = Main.instance.server.getPlayer(username) ?: return
         ChestListener.closeChest(owner)
         val viewer = event.player
         if(owner == viewer) return
 
         if(!owner.isOnline) {
             IOScope.launch {
-                val enderInventory = Database.Cache.getInventory(owner.name)
-                if(Database.updateInventory(enderInventory) > 0) {
-                    info("Updating inventory for ${owner.name}...")
-                } else {
-                    info("Error updating inventory for ${owner.name}...")
+                Database.Cache.getInventory(owner.name).let {
+                    Database.updateInventory(it)
                 }
             }
         }
