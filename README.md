@@ -35,6 +35,7 @@
 | lightenderchest                     | Open an enderchest                  | lightenderchest.use                 |
 | lightenderchest clear               | Clear an enderchest                 | lightenderchest.clear               |
 |                                     |                                     |                                     |
+| lightenderchest help                | List of commands                    | lightenderchest.help                |
 | lightenderchest \<username>         | Open someone else's inventory       | lightenderchest.admin.view          |
 | lightenderchest open \<username>    | Open the enderchest to the player   | lightenderchest.admin.open          |
 | lightenderchest close \<username>   | Close the enderchest to the player  | lightenderchest.admin.close         |

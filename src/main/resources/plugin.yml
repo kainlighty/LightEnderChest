@@ -39,6 +39,9 @@ permissions:
     default: true
     description: "Allows clearing own ender-chest"
 
+  lightenderchest.help:
+    description: "List of commands"
+
   # Разрешение на /lightenderchest reload
   lightenderchest.reload:
     description: "Access to reload configurations"
@@ -47,6 +50,7 @@ permissions:
   lightenderchest.cache.*:
     description: "Base node for cache commands"
     children:
+      lightenderchest.help: true
       lightenderchest.cache.data: true
       lightenderchest.cache.refresh: true
       lightenderchest.cache.purge: true
@@ -76,6 +80,7 @@ permissions:
   lightenderchest.admin.*:
     description: "Full admin node for LightEnderChest"
     children:
+      lightenderchest.help: true
       lightenderchest.admin.view: true
       lightenderchest.admin.open: true
       lightenderchest.admin.close: true

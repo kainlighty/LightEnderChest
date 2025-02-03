@@ -278,6 +278,7 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
     }
 
     private fun sendHelp(sender: CommandSender) {
+        if(!sender.hasEnderPermission("help")) return
         plugin.getMessagesConfig().getStringList("help").forEach {
             sender.multiMessage(it)
         }
