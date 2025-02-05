@@ -130,7 +130,6 @@ class EnderInventoryManager(private val username: String) {
         }
     }
 
-    // TODO: Протестировать с offline player
     private fun closeInventoryEvent(event: InventoryCloseEvent) {
         val owner: OfflinePlayer? = Main.instance.server.getOfflinePlayer(username)
         if(owner.isNull()) return
