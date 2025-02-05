@@ -13,6 +13,7 @@ help:
   - ''
   - '<light_purple>» /lightenderchest (<username>) <gray>— <white>Открыть эндер-сундук игрока'
   - '<light_purple>» /lightenderchest clear (<username>) <gray>— <white>Очистить эндер-сундук игрока'
+  - '<light_purple>» /lightenderchest clear <gray>— <white>Список доступных команд'
   - '<light_purple>» /lightenderchest open <username> <gray>— <white>Открыть эндер-сундук игроку'
   - '<light_purple>» /lightenderchest close <username> <gray>— <white>Закрыть эндер-сундук игроку'
   - '<light_purple>» /lightenderchest reset <username> <gray>— <white>Сбросить эндер-сундук игрока'
