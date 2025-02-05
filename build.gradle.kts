@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "ru.kainlight.lightenderchest"
-version = "1.0.1"
+version = "1.0.2"
 
 val kotlinVersion = "2.1.10"
 val adventureVersion = "4.18.0"

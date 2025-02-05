@@ -1,5 +1,7 @@
+config-version: 1.0 # DON'T TOUCH ME
+
 inventory:
-  title: "EnderChest"
+  title: "Enderchest"
   size: 54
   blocked-item:
     name: "<red>Blocked"

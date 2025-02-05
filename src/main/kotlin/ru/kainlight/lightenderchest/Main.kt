@@ -36,8 +36,13 @@ class Main : LightPlugin() {
 
         this.enderChestConfig = LightConfig(this, "gui", "ender_chest.yml")
         this.enderChestConfig.saveDefaultConfig()
+        this.enderChestConfig.configurationVersion = 1.0
+        this.enderChestConfig.updateConfig()
+
         this.dataChestConfig = LightConfig(this, "gui", "data_chest.yml")
         this.dataChestConfig.saveDefaultConfig()
+        this.dataChestConfig.configurationVersion = 1.0
+        this.dataChestConfig.updateConfig()
 
         LightConfig.saveLanguages(this, "language")
         this.messageConfig.saveDefaultConfig()

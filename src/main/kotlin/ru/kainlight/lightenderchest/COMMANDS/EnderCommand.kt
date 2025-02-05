@@ -1,22 +1,17 @@
 package ru.kainlight.lightenderchest.COMMANDS
 
-import kotlinx.coroutines.launch
 import org.bukkit.OfflinePlayer
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.configuration.ConfigurationSection
-import org.bukkit.entity.Player
 import ru.kainlight.lightenderchest.DATA.Database
 import ru.kainlight.lightenderchest.MENU.Data.DataInventoryManager
-import ru.kainlight.lightenderchest.MENU.Ender.EnderInventory
-import ru.kainlight.lightenderchest.MENU.Ender.EnderInventoryManager
 import ru.kainlight.lightenderchest.Main
 import ru.kainlight.lightenderchest.info
 import ru.kainlight.lightenderchest.isNull
 import ru.kainlight.lightenderchest.prefixMessage
-import ru.kainlight.lightlibrary.UTILS.IOScope
 import ru.kainlight.lightlibrary.UTILS.IOScopeLaunch
 import ru.kainlight.lightlibrary.UTILS.bukkitThreadNotNull
 import ru.kainlight.lightlibrary.equalsIgnoreCase
@@ -55,7 +50,7 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                         if (! sender.hasEnderPermission("clear")) return true
                         sender.getPlayer()?.let { player ->
                             Database.Cache.getInventory(player.name)?.clearInventory()
-                            inventoriesSection.getString("clear").let {
+                            inventoriesSection.getString("clear")?.let {
                                 sender.prefixMessage(it)
                             }
                         } ?: run {
@@ -67,14 +62,14 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                     "reload" -> {
                         if (! sender.hasEnderPermission("reload")) return true
                         plugin.reloadConfigurations()
-                        plugin.getMessagesConfig().getString("reload").let {
+                        plugin.getMessagesConfig().getString("reload")?.let {
                             sender.prefixMessage(it)
                         }
                         return true
                     }
                 }
 
-                // $ /lec <playerName> (смотреть чужой)
+                // /lec <username>
                 if (! sender.hasEnderPermission("admin.view")) return true
                 sender.getPlayer()?.let { player ->
                     val username = action
@@ -128,11 +123,7 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
             "data" -> {
                 if (! sender.hasEnderPermission("cache.data")) return true
                 sender.getPlayer()?.let { player ->
-                    DataInventoryManager(plugin, player).let {
-                        IOScope.launch {
-                            it.open()
-                        }
-                    }
+                    DataInventoryManager(plugin, player).open()
                 }
                 return true
             }
@@ -178,17 +169,6 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                 Database.Cache.clearOnlines()
                 cacheSection.getString("clear").let {
                     sender.prefixMessage(it)
-                }
-                return true
-            }
-
-            "data-copy" -> {
-                if(sender !is Player) return true
-                var i = 1
-                repeat(74) {
-                    i++
-                    val name = "test$i"
-                    Database.Cache.set(name, EnderInventory(name, EnderInventoryManager(name).createInventory()))
                 }
                 return true
             }
@@ -291,7 +271,8 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                 1 -> {
                     val result = mutableListOf<String>()
 
-                    if(sender.hasPermission("lightenderchest.admin.*") ||
+                    if(sender.hasPermission("lightenderchest.help") ||
+                        sender.hasPermission("lightenderchest.admin.*") ||
                         sender.hasPermission("lightenderchest.cache.*") ||
                         sender.hasPermission("lightenderchest.*")) {
                         result += "help"

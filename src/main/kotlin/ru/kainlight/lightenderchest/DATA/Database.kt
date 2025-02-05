@@ -500,8 +500,8 @@ object Database {
             return inventoryCache.get(username)
         }
 
-        fun getInventory(username: String): EnderInventory? {
-            info("Cache: Getting inventory for $username")
+        fun getInventory(username: String, withInfo: Boolean = true): EnderInventory? {
+            if(withInfo) info("Cache: Getting inventory for $username")
             return inventoryCache.getIfPresent(username)
         }
 

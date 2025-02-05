@@ -29,7 +29,7 @@ data class EnderInventory(
 
         fun closeInventoryForViewers(inventory: Inventory) {
             inventory.viewers.toList().mapNotNull { it as? Player }.forEach {
-                ChestListener.closeChest(it)
+                ChestListener.getChest(it)?.close()
                 it.closeInventory()
             }
         }
@@ -82,7 +82,6 @@ data class EnderInventory(
     fun openInventory(player: Player? = Main.instance.server.getPlayer(username)): Player? {
         if (inventory.holder !is EnderInventoryHolder) return null
         player?.let {
-            ChestListener.openChest(it)
             it.openInventory(inventory)
             info("Player $username opened the enderchest")
             return it
@@ -93,7 +92,6 @@ data class EnderInventory(
     fun closeInventory(): Player? {
         if (inventory.holder !is EnderInventoryHolder) return null
         Main.instance.server.getPlayer(username)?.let {
-            ChestListener.closeChest(it)
             it.closeInventory()
             info("Player $username closed the enderchest")
             return it

@@ -34,14 +34,15 @@ class ChestListener() : Listener {
         if (!clickedBlock.isEnderChest()) return
         val player = event.player
 
-        if (player.hasEnderPermission("use")) {
-            event.isCancelled = true
+        if(!player.hasEnderPermission("use")) return
+        val username = player.name
 
-            Database.Cache.getOrCreateInventory(player.name).let {
-                setChest(player)?.open()
-                info("Player ${player.name} opened the enderchest at the location ${clickedBlock.location}")
-                it.openInventory()
-            }
+        event.isCancelled = true
+
+        Database.Cache.getOrCreateInventory(username).let {
+            setChest(player)?.open()
+            info("Player $username opened the enderchest at the location ${clickedBlock.location}")
+            it.openInventory()
         }
         return
     }
@@ -71,8 +72,6 @@ class ChestListener() : Listener {
                 ?: newChest.also { openedChest.put(player, it) }
         }
 
-        fun openChest(player: Player?) = getChest(player)?.open()
-        fun closeChest(player: Player?) = this.openedChest.get(player)?.close()
         fun getChest(player: Player?): EnderChest? = this.openedChest.get(player)
 
         private fun getEnderChest(player: Player?): EnderChest? {

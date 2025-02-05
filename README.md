@@ -4,17 +4,18 @@
 
 - Purchase of slots
 - Customizable enderchest
-- Setting the price for each slot _or_ specify the `price-step` for slots without a price
-- Inventory management and statistics in the data menu
+- Set a fixed price for each slot or define a `price-step` for slots without an individual price
+- Manage inventories and view cache statistics via the data menu
 - Support for **Vault** and **PlayerPoints**
-- Support for **MiniMessage** and **Legacy** colors
-- Full database caching for increased performance.
+- Compatible with **MiniMessage** and **Legacy** color codes
+- Database caching for enhanced performance
 
 ### › Abilities
 
-- Purchase of slots in someone else's inventory _(including without withdrawing funds from the balance)_
+- Purchase slots in another player's enderchest _(including the option to do so without deducting money)_
 - Prohibition on buying slots in someone else's inventory
 - Inventory editing is prohibited.
+- Close a slot in the viewed inventory using **SHIFT + RIGHT‑CLICK**
 
 ### › Screenshots
 
@@ -32,29 +33,29 @@
 
 | Command                             | Description                         | Permission                          |
 |-------------------------------------|-------------------------------------|-------------------------------------|
-| lightenderchest                     | Open an enderchest                  | lightenderchest.use                 |
-| lightenderchest clear               | Clear an enderchest                 | lightenderchest.clear               |
+| lightenderchest                     | Open your enderchest                | lightenderchest.use                 |
+| lightenderchest clear               | Clear your enderchest               | lightenderchest.clear               |
 |                                     |                                     |                                     |
-| lightenderchest help                | List of commands                    | lightenderchest.help                |
-| lightenderchest \<username>         | Open someone else's inventory       | lightenderchest.admin.view          |
-| lightenderchest open \<username>    | Open the enderchest to the player   | lightenderchest.admin.open          |
-| lightenderchest close \<username>   | Close the enderchest to the player  | lightenderchest.admin.close         |
-| lightenderchest clear \<username>   | Clear an enderchest                 | lightenderchest.admin.clear         |
-| lightenderchest reset \<username>   | Reset the enderchest to the player  | lightenderchest.admin.reset         |
+| lightenderchest help                | Show a list of available commands   | lightenderchest.help                |
+| lightenderchest \<username>         | Open another player's enderchest    | lightenderchest.admin.view          |
+| lightenderchest open \<username>    | Open enderchest to the player       | lightenderchest.admin.open          |
+| lightenderchest close \<username>   | Close enderchest to the player      | lightenderchest.admin.close         |
+| lightenderchest clear \<username>   | Clear another player's enderchest   | lightenderchest.admin.clear         |
+| lightenderchest reset \<username>   | Reset another player's enderchest   | lightenderchest.admin.reset         |
 |                                     |                                     |                                     |
 | lightenderchest cache data          | Open the cache data menu            | lightenderchest.cache.data          |
 | lightenderchest cache refresh       | Refresh the cache from the database | lightenderchest.cache.refresh       |
-| lightenderchest cache purge         | Remove old data from the cache      | lightenderchest.cache.purge         |
+| lightenderchest cache purge         | Purge outdated data from the cache  | lightenderchest.cache.purge         |
 | lightenderchest cache clear-online  | Clear the cache for online players  | lightenderchest.cache.clear-online  |
 | lightenderchest cache clear-offline | Clear the cache for offline players | lightenderchest.cache.clear-offline |
 | lightenderchest cache clear         | Clear the entire cache              | lightenderchest.cache.clear         |
 |                                     |                                     |                                     |
 | lightenderchest reload              | Reload all configurations           | lightenderchest.reload              |
 
-| Permission                 | Description                        |
-|----------------------------|------------------------------------|
-| lightenderchest.admin.edit | Edit other enderchests             |
-| lightenderchest.admin.buy  | Buying slots in other enderchests  |
-| lightenderchest.cache.*    | Full access to cache management    |
-| lightenderchest.admin.*    | Complete management of enderchests |
-| lightenderchest.*          | Full access                        |
+| Permission                 | Description                                   |
+|----------------------------|-----------------------------------------------|
+| lightenderchest.admin.edit | Edit other players' enderchests               |
+| lightenderchest.admin.buy  | Purchase slots in other players' enderchests  |
+| lightenderchest.cache.*    | Full access to cache management               |
+| lightenderchest.admin.*    | Complete management of enderchests            |
+| lightenderchest.*          | Full access                                   |

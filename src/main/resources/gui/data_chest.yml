@@ -1,8 +1,11 @@
+config-version: 1.0 # DON'T TOUCH ME
+
 title: "Cache Data (page #currentPage#/#nextPage#)"
 items:
   players:
-    name-color: "<yellow>"
+    name-color: YELLOW
     lore:
+      - ''
       - '<white>Items: <yellow>#itemsCount#'
       - '<white>Opened: <green>#openedSlotsCount#'
       - '<white>Closed: <red>#closedSlotsCount#'
@@ -11,11 +14,13 @@ items:
       - '<yellow>Middle Click <white>— Teleport to the last open chest'
       - '<yellow>Right Click <white>— Clear inventory'
       - '<yellow>Q <white>— Delete from cache<reset>'
+      - ''
   statistics:
     name: "<red>Statistics"
     material: COMPASS
     glow: false
     lore:
+      - ''
       - '<white>Hits: <yellow>#hitCount#'
       - '<white>Misses: <yellow>#missCount#'
       - '<white>Requests: <yellow>#requestCount#'
@@ -23,6 +28,7 @@ items:
       - '<white>Average Load Penalty: <yellow>#averageLoadPenalty#ms'
       - '<white>Load Success Count: <yellow>#loadSuccessCount#'
       - '<white>Load Failure Count: <yellow>#loadFailureCount#<reset>'
+      - ''
   next-page:
     name: "<yellow>»"
     material: ARROW

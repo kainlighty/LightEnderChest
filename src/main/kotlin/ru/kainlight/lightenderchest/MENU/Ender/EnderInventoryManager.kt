@@ -1,6 +1,7 @@
 package ru.kainlight.lightenderchest.MENU.Ender
 
 import kotlinx.coroutines.launch
+import org.bukkit.OfflinePlayer
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
@@ -11,20 +12,23 @@ import ru.kainlight.lightenderchest.DATA.Database
 import ru.kainlight.lightenderchest.LISTENERS.ChestListener
 import ru.kainlight.lightenderchest.Main
 import ru.kainlight.lightenderchest.info
+import ru.kainlight.lightenderchest.isNull
 import ru.kainlight.lightenderchest.prefixMessage
 import ru.kainlight.lightlibrary.BUILDERS.InventoryBuilder
 import ru.kainlight.lightlibrary.BUILDERS.ItemBuilder
 import ru.kainlight.lightlibrary.UTILS.IOScope
+import ru.kainlight.lightlibrary.UTILS.Parser
 import ru.kainlight.lightlibrary.sound
 
 class EnderInventoryManager(private val username: String) {
 
     fun createInventory(fillBlockedItems: Boolean = true): Inventory {
         val holder = EnderInventoryHolder()
+        val blockedItems = blockedItems
 
-        val title = Main.instance.enderChestConfig.getConfig().getString("inventory.title", InventoryType.ENDER_CHEST.name)
+        val title = Main.instance.enderChestConfig.getConfig().getString("inventory.title", InventoryType.ENDER_CHEST.name)!!
         val size = totalSize
-        val inventoryBuilder = InventoryBuilder(Main.instance, title, holder, size, true)
+        val inventoryBuilder = InventoryBuilder(Main.instance, Parser.mini(title), holder, size, true)
 
         if(fillBlockedItems) {
             for (i in 0 until size) {
@@ -44,7 +48,7 @@ class EnderInventoryManager(private val username: String) {
 
     private fun clickInventoryEvent(event: InventoryClickEvent) {
         val viewer = event.whoClicked as? Player ?: return
-        val inventoriesConfig = Main.instance.getMessagesConfig().getConfigurationSection("inventories") !!
+        val inventoriesConfig = Main.instance.getMessagesConfig().getConfigurationSection("inventories") ?: return
 
         val inventoryOwnerName= username
         val hasViewer = viewer.name != inventoryOwnerName
@@ -59,7 +63,7 @@ class EnderInventoryManager(private val username: String) {
             return
         }
 
-        val enderInventory = Database.Cache.getInventory(inventoryOwnerName) ?: return
+        val enderInventory = Database.Cache.getInventory(inventoryOwnerName, false) ?: return
         val inventory = if (enderInventory.inventory.holder is EnderInventoryHolder) enderInventory.inventory else return
 
         val slot = event.slot
@@ -126,15 +130,17 @@ class EnderInventoryManager(private val username: String) {
         }
     }
 
+    // TODO: Протестировать с offline player
     private fun closeInventoryEvent(event: InventoryCloseEvent) {
-        val owner = Main.instance.server.getPlayer(username) ?: return
-        ChestListener.closeChest(owner)
+        val owner: OfflinePlayer? = Main.instance.server.getOfflinePlayer(username)
+        if(owner.isNull()) return
+        if(owner!!.isOnline) ChestListener.getChest(owner.player)?.close()
         val viewer = event.player
         if(owner == viewer) return
 
         if(!owner.isOnline) {
             IOScope.launch {
-                Database.Cache.getInventory(owner.name).let {
+                Database.Cache.getInventory(owner.name!!).let {
                     Database.updateInventory(it)
                 }
             }

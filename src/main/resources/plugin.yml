@@ -10,8 +10,8 @@ api-version: '1.17'
 prefix: LightEnderChest
 
 depend: [ Vault ]
-softdepend: [ PlayerPoints, PlaceholderAPI ]
-loadbefore: [ Vault, PlayerPoints ]
+softdepend: [ PlayerPoints, PlaceholderAPI, SkinsRestorer ]
+loadbefore: [ Vault, PlayerPoints, SkinsRestorer ]
 
 libraries:
   - org.jetbrains.kotlin:kotlin-stdlib:${kotlinVersion}
