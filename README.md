@@ -14,8 +14,8 @@
 
 - Purchase slots in another player's enderchest _(including the option to do so without deducting money)_
 - Prohibition on buying slots in someone else's inventory
-- Inventory editing is prohibited.
-- Close a slot in the viewed inventory using **SHIFT + RIGHT‑CLICK**
+- Inventory editing is prohibited
+- Close a slot in the viewed inventory using **SHIFT + RIGHT‑CLICK**.
 
 ### › Screenshots
 
