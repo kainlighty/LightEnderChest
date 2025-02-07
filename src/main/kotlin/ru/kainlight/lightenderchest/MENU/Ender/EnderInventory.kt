@@ -114,7 +114,7 @@ data class EnderInventory(
 
     fun resetInventory() = IOScope.async {
         info("Inventory has been reset for $username")
-        return@async Database.removeInventory(username)
+        return@async Database.removeInventory(username) > 0
     }
 
     fun simpleString(): String {

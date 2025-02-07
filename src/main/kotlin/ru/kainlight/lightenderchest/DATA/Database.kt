@@ -24,6 +24,7 @@ import ru.kainlight.lightenderchest.serve
 import ru.kainlight.lightenderchest.warning
 import ru.kainlight.lightlibrary.UTILS.IODispatcher
 import ru.kainlight.lightlibrary.UTILS.bukkitThread
+import ru.kainlight.lightlibrary.UTILS.useCatching
 import ru.kainlight.lightlibrary.equalsIgnoreCase
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -252,6 +253,13 @@ object Database {
         }
 
         val username = inventory.username
+        val serializeInventory = serializeInventory(inventory.inventory)
+
+        if(serializeInventory == null) {
+            serve("Failed to serialize $username inventory")
+            return 0
+        }
+
         val sql = if (baseType.equalsIgnoreCase("sqlite")) {
             """
             INSERT INTO $tableName (username, unique_id, opened_slots, inventory)
@@ -273,7 +281,7 @@ object Database {
         val result = executeUpdate(sql) {
             it.setString(1, username)
             it.setString(2, inventory.openedSlots.joinToString(","))
-            it.setString(3, serializeInventory(inventory.inventory))
+            it.setString(3, serializeInventory)
         }
 
         info("Inventory created or updated for $username. Cached: ${! skipCache}")
@@ -285,6 +293,13 @@ object Database {
     private fun insertInventorySync(inventory: EnderInventory?, skipCache: Boolean = false): Int {
         if (inventory == null) return 0
         val username = inventory.username
+        val serializeInventory = serializeInventory(inventory.inventory)
+
+        if(serializeInventory == null) {
+            serve("Failed to serialize $username inventory")
+            return 0
+        }
+
         val sql = """
                 INSERT INTO $tableName (username, opened_slots, inventory)
                 SELECT ?, ?, ?
@@ -295,7 +310,7 @@ object Database {
         val result = executeUpdate(sql) {
             it.setString(1, username)
             it.setString(2, inventory.openedSlots.joinToString(","))
-            it.setString(3, serializeInventory(inventory.inventory))
+            it.setString(3, serializeInventory)
             it.setString(4, username)
         }
         if (! skipCache) {
@@ -327,6 +342,14 @@ object Database {
     private fun updateInventorySync(inventory: EnderInventory?, skipCache: Boolean = true): Int {
         if (inventory == null) return 0
         val username = inventory.username
+
+        val serializeInventory = serializeInventory(inventory.inventory)
+
+        if(serializeInventory == null) {
+            serve("Failed to serialize $username inventory")
+            return 0
+        }
+
         val sql = """
             UPDATE $tableName 
             SET opened_slots = ?, inventory = ?
@@ -335,7 +358,7 @@ object Database {
 
         val result = executeUpdate(sql) {
             it.setString(1, inventory.openedSlots.joinToString(","))
-            it.setString(2, serializeInventory(inventory.inventory))
+            it.setString(2, serializeInventory)
             it.setString(3, username)
         }
         if (! skipCache) Cache.set(username, inventory)
@@ -373,7 +396,7 @@ object Database {
                 .toMutableSet()
 
             val inventory = if (! inventoryData.isNullOrBlank()) {
-                deserializeInventory(dbUsername, inventoryData)
+                deserializeInventory(dbUsername, inventoryData, openedSlots)
             } else {
                 serve("Inventory for $username not found")
                 null
@@ -399,12 +422,14 @@ object Database {
 
             do {
                 val username = rs.getString("username")
+                val openedSlots = rs.getString("opened_slots").split(",")
+                    .mapNotNull { it.toIntOrNull() }
+                    .toMutableSet()
+                val inventory = deserializeInventory(username, rs.getString("inventory"), openedSlots)
 
                 list += EnderInventory(username = username,
-                    openedSlots = rs.getString("opened_slots")?.split(",")
-                        ?.mapNotNull { it.toIntOrNull() }
-                        ?.toMutableSet() ?: mutableSetOf(),
-                    inventory = deserializeInventory(username, rs.getString("inventory")) !!
+                    openedSlots = openedSlots,
+                    inventory = inventory!!
                 )
             } while (rs.next())
             info("Request for fetching all inventories. Result: ${list.size} values")
@@ -416,27 +441,37 @@ object Database {
     // ! Serialization and deserialization
     // ----------------------------------
 
-    private fun serializeInventory(inventory: Inventory?): String {
-        if (inventory == null) return ""
+    private fun serializeInventory(inventory: Inventory?): String? {
+        if (inventory == null) return null
 
-        val items = inventory.contents
-        ByteArrayOutputStream().use { byteOut ->
-            BukkitObjectOutputStream(byteOut).use { dataOut ->
+        // Пустой слот или из blockedItems → null
+        // По итогу не записываем в базу blockedItems (при десереализоации заполняются в createInventory)
+        val items = inventory.contents.map { item ->
+            when {
+                item == null -> null
+                EnderInventoryManager.blockedItems.any { blocked -> item.isSimilar(blocked) } -> null
+                else -> item
+            }
+        }.toTypedArray()
+
+        return ByteArrayOutputStream().useCatching { byteOut ->
+            BukkitObjectOutputStream(byteOut).useCatching { dataOut ->
                 dataOut.writeInt(items.size)
                 for (item in items) {
                     dataOut.writeObject(item)
                 }
             }
-            return Base64.getEncoder().encodeToString(byteOut.toByteArray())
+            Base64.getEncoder().encodeToString(byteOut.toByteArray())
         }
     }
 
-    private fun deserializeInventory(username: String, data: String?): Inventory? {
+
+    private fun deserializeInventory(username: String, data: String?, openedSlots: MutableSet<Int> = mutableSetOf<Int>()): Inventory? {
         if (data.isNullOrBlank()) return null
 
         val bytes = Base64.getDecoder().decode(data)
-        ByteArrayInputStream(bytes).use { byteIn ->
-            BukkitObjectInputStream(byteIn).use { dataIn ->
+        ByteArrayInputStream(bytes).useCatching { byteIn ->
+            BukkitObjectInputStream(byteIn).useCatching { dataIn ->
                 val size = dataIn.readInt()
                 val items = arrayOfNulls<ItemStack>(size)
 
@@ -444,8 +479,13 @@ object Database {
                     items[i] = dataIn.readObject() as ItemStack?
                 }
 
-                val inventory = EnderInventoryManager(username).createInventory(fillBlockedItems = false)
-                inventory.contents = items
+                val inventory = EnderInventoryManager(username).createInventory(fillBlockedItems = true)
+
+                for (slot in openedSlots) {
+                    if (slot in 0 until size) {
+                        inventory.setItem(slot, items[slot])
+                    }
+                }
 
                 info("Deserialize inventory for $username is successfully")
 
@@ -482,7 +522,7 @@ object Database {
 
         fun clearOfflines() {
             val map: List<String> = Main.instance.server.offlinePlayers
-                .filter { ! it.isConnected || ! it.isOnline }
+                .filter { !it.isOnline }
                 .mapNotNull { it.name }
             inventoryCache.invalidateAll(map)
 
@@ -532,11 +572,20 @@ object Database {
             }
         }
 
-        fun refreshAllAsync(): CompletableFuture<Map<String, EnderInventory>> {
-            info("Cache: Synchronously request for refreshed all inventories")
+        fun refreshAsync(): CompletableFuture<Map<String, EnderInventory>> {
+            info("Cache: Asynchronously request for refreshed all inventories")
             val map = Main.instance.server.onlinePlayers.mapNotNull { it.name }
-                .zip(Main.instance.server.offlinePlayers.mapNotNull { it.name }).toMap()
-            return inventoryCache.refreshAll(map.values).exceptionally {
+            return inventoryCache.refreshAll(map).exceptionally {
+                it.printStackTrace()
+                null
+            }
+        }
+
+        fun refreshAllAsync(): CompletableFuture<Map<String, EnderInventory>> {
+            info("Cache: Asynchronously request for refreshed all inventories")
+            val map = Main.instance.server.onlinePlayers.mapNotNull { it.name }
+                .zip(Main.instance.server.offlinePlayers.mapNotNull { it.name }).toMap().values
+            return inventoryCache.refreshAll(map).exceptionally {
                 it.printStackTrace()
                 null
             }
@@ -555,15 +604,16 @@ object Database {
          ** При выключении сервера оставить флаг `closeInventories` в `false`, иначе всё ляжет нахрен
          **/
         suspend fun saveToDatabase(closeInventories: Boolean = false): List<Int> = supervisorScope {
-            val inventories = getInventories() // Предполагается, что эта функция возвращает список инвентарей
+            val inventories = getInventories()
+
+            if (inventories.isEmpty()) {
+                warning("Cache: Asynchronously request for saving all inventories in database: inventories is empty")
+                return@supervisorScope emptyList<Int>()
+            }
 
             info("Cache: Asynchronously request for saving all inventories in database")
-            if (inventories.isEmpty()) return@supervisorScope emptyList<Int>()
-            warning("Cache: Asynchronously request for saving all inventories in database: inventories is empty")
-
             if (closeInventories) {
-                // Закрываем все инвентари на основном потоке
-                bukkitThread(inventories) {
+                this.bukkitThread(inventories) {
                     warning("Cache: Synchronously request for closing all inventories")
                     it.forEach {
                         it.closeInventoryForViewers()
@@ -571,7 +621,6 @@ object Database {
                 }
             }
 
-            // Асинхронно сохраняем данные в базу данных
             val jobs = inventories.map { inventory ->
                 async(IODispatcher) {
                     info("The data from the cache has been saved to the database")
@@ -579,7 +628,6 @@ object Database {
                 }
             }
 
-            // Ждём завершения всех операций сохранения
             jobs.awaitAll()
         }
     }

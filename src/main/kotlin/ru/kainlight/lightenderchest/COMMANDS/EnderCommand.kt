@@ -1,5 +1,6 @@
 package ru.kainlight.lightenderchest.COMMANDS
 
+import kotlinx.coroutines.launch
 import org.bukkit.OfflinePlayer
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -9,21 +10,20 @@ import org.bukkit.configuration.ConfigurationSection
 import ru.kainlight.lightenderchest.DATA.Database
 import ru.kainlight.lightenderchest.MENU.Data.DataInventoryManager
 import ru.kainlight.lightenderchest.Main
+import ru.kainlight.lightenderchest.getStringWithPrefix
 import ru.kainlight.lightenderchest.info
 import ru.kainlight.lightenderchest.isNull
-import ru.kainlight.lightenderchest.prefixMessage
+import ru.kainlight.lightlibrary.*
+import ru.kainlight.lightlibrary.UTILS.IOScope
 import ru.kainlight.lightlibrary.UTILS.IOScopeLaunch
+import ru.kainlight.lightlibrary.UTILS.bukkitThread
 import ru.kainlight.lightlibrary.UTILS.bukkitThreadNotNull
-import ru.kainlight.lightlibrary.equalsIgnoreCase
-import ru.kainlight.lightlibrary.getPlayer
-import ru.kainlight.lightlibrary.message
-import ru.kainlight.lightlibrary.multiMessage
 
 class EnderCommand(private val plugin: Main) : CommandExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<String>): Boolean {
-        if(!sender.hasEnderPermission("use")) return true
-        info("${sender.name} perform command with arguments: ${args.joinToString(",")}")
+        if (! sender.hasEnderPermission("use")) return true
+        info("${sender.name} perform command with arguments: ${args.joinToString(", ")}")
 
         val inventoriesSection = plugin.getMessagesConfig().getConfigurationSection("inventories") !!
 
@@ -50,9 +50,9 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                         if (! sender.hasEnderPermission("clear")) return true
                         sender.getPlayer()?.let { player ->
                             Database.Cache.getInventory(player.name)?.clearInventory()
-                            inventoriesSection.getString("clear")?.let {
-                                sender.prefixMessage(it)
-                            }
+                            inventoriesSection.getStringWithPrefix("clear")
+                                .sendMessage(sender)
+
                         } ?: run {
                             sender.message("<red>This command can only be used by a player")
                         }
@@ -62,8 +62,18 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                     "reload" -> {
                         if (! sender.hasEnderPermission("reload")) return true
                         plugin.reloadConfigurations()
-                        plugin.getMessagesConfig().getString("reload")?.let {
-                            sender.prefixMessage(it)
+                        plugin.getMessagesConfig().getStringWithPrefix("reload")
+                            ?.sendMessage(sender)
+                        return true
+                    }
+
+                    "test" -> {
+                        IOScope.launch {
+                            Database.getInventory(sender.name)?.let { inv ->
+                                inv.inventory.bukkitThread {
+                                    sender.getPlayer()!!.openInventory(it)
+                                }
+                            }
                         }
                         return true
                     }
@@ -76,18 +86,16 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
 
                     val replacedUsername = arrayOf("#username#" to username)
 
-                    if(plugin.server.getOfflinePlayer(username).isNull()) {
-                        plugin.getMessagesConfig().getString("player-not-found")?.let {
-                            player.prefixMessage(it, replace = replacedUsername)
-                        }
+                    if (plugin.server.getOfflinePlayer(username).isNull()) {
+                        plugin.getMessagesConfig().getStringWithPrefix("player-not-found")
+                            .sendMessage(player, replace = replacedUsername)
                         return true
                     }
 
                     Database.Cache.getOrCreateInventory(username).let { inventory ->
                         player.openInventory(inventory.inventory)
-                        inventoriesSection.getString("admin.view").let {
-                            sender.prefixMessage(it, replace = replacedUsername)
-                        }
+                        inventoriesSection.getStringWithPrefix("admin.view")
+                            .sendMessage(sender, replace = replacedUsername)
                     }
                     return true
                 } ?: run {
@@ -100,7 +108,7 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                 val action = args[0].lowercase()
                 val username = args[1].trim()
 
-                return when(action) {
+                return when (action) {
                     "cache" -> handleCacheCommands(sender, username)
                     else -> handleAdminCommands(username, sender, action, inventoriesSection)
                 }
@@ -117,7 +125,7 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
      * Обработка субкоманд /lec cache <subcommand>
      */
     private fun handleCacheCommands(sender: CommandSender, arg: String): Boolean {
-        val cacheSection = plugin.getMessagesConfig().getConfigurationSection("cache")!!
+        val cacheSection = plugin.getMessagesConfig().getConfigurationSection("cache") !!
 
         when (arg.lowercase()) {
             "data" -> {
@@ -130,80 +138,78 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
 
             "refresh" -> {
                 if (! sender.hasEnderPermission("cache.refresh")) return true
-                Database.Cache.refreshAllAsync()
-                cacheSection.getString("refresh").let {
-                    sender.prefixMessage(it)
-                }
+                Database.Cache.refreshAsync()
+                cacheSection.getStringWithPrefix("refresh")
+                    .sendMessage(sender)
                 return true
             }
 
             "purge" -> {
                 if (! sender.hasEnderPermission("cache.purge")) return true
                 Database.Cache.purge()
-                cacheSection.getString("purge").let {
-                    sender.prefixMessage(it)
-                }
+                cacheSection.getStringWithPrefix("purge")
+                    .sendMessage(sender)
                 return true
             }
 
             "clear" -> {
                 if (! sender.hasEnderPermission("cache.clear")) return true
                 Database.Cache.clear()
-                cacheSection.getString("clear").let {
-                    sender.prefixMessage(it)
-                }
+                cacheSection.getStringWithPrefix("clear")
+                    .sendMessage(sender)
                 return true
             }
 
             "clear-offline" -> {
                 if (! sender.hasEnderPermission("cache.clear-offline")) return true
                 Database.Cache.clearOfflines()
-                cacheSection.getString("clear").let {
-                    sender.prefixMessage(it)
-                }
+                cacheSection.getStringWithPrefix("clear")
+                    .sendMessage(sender)
                 return true
             }
 
             "clear-online" -> {
                 if (! sender.hasEnderPermission("cache.clear-online")) return true
                 Database.Cache.clearOnlines()
-                cacheSection.getString("clear").let {
-                    sender.prefixMessage(it)
-                }
+                cacheSection.getStringWithPrefix("clear")
+                    .sendMessage(sender)
                 return true
             }
+
             else -> return true
         }
     }
 
-    private fun handleAdminCommands(username: String, sender: CommandSender, action: String, inventoriesSection: ConfigurationSection): Boolean {
+    private fun handleAdminCommands(
+        username: String,
+        sender: CommandSender,
+        action: String,
+        inventoriesSection: ConfigurationSection
+    ): Boolean {
         val offlinePlayer: OfflinePlayer? = plugin.server.getOfflinePlayer(username)
         val replacedUsername = arrayOf("#username#" to username)
 
         if (offlinePlayer.isNull()) {
-            plugin.getMessagesConfig().getString("player-not-found").let {
-                sender.prefixMessage(it, replace = replacedUsername)
-            }
+            plugin.getMessagesConfig().getStringWithPrefix("player-not-found")
+                .sendMessage(sender, replace = replacedUsername)
             return true
         }
 
         val savedInventory = Database.Cache.getInventory(username)
         if (savedInventory == null) {
-            inventoriesSection.getString("not-found").let {
-                sender.prefixMessage(it, replace = replacedUsername)
-            }
+            inventoriesSection.getStringWithPrefix("not-found")
+                .sendMessage(sender, replace = replacedUsername)
             return true
         }
 
-        val adminSection = inventoriesSection.getConfigurationSection("admin")!!
+        val adminSection = inventoriesSection.getConfigurationSection("admin") !!
 
         when (action) {
             "open" -> {
                 if (! sender.hasEnderPermission("admin.open")) return true
-                if(!offlinePlayer!!.isOnline) {
-                    plugin.getMessagesConfig().getString("player-not-found").let {
-                        sender.prefixMessage(it, replace = replacedUsername)
-                    }
+                if (! offlinePlayer !!.isOnline) {
+                    plugin.getMessagesConfig().getStringWithPrefix("player-not-found")
+                        .sendMessage(sender, replace = replacedUsername)
                     return true
                 }
                 savedInventory.openInventory()
@@ -213,10 +219,9 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
 
             "close" -> {
                 if (! sender.hasEnderPermission("admin.close")) return true
-                if(!offlinePlayer!!.isOnline) {
-                    plugin.getMessagesConfig().getString("player-not-found").let {
-                        sender.prefixMessage(it, replace = replacedUsername)
-                    }
+                if (! offlinePlayer !!.isOnline) {
+                    plugin.getMessagesConfig().getStringWithPrefix("player-not-found")
+                        .sendMessage(sender, replace = replacedUsername)
                     return true
                 }
                 savedInventory.closeInventory()
@@ -227,20 +232,21 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
             "clear" -> {
                 if (! sender.hasEnderPermission("admin.clear")) return true
                 savedInventory.clearInventory()
-                adminCommandMessage(adminSection, "clear", offlinePlayer!!, sender)
+                adminCommandMessage(adminSection, "clear", offlinePlayer !!, sender)
                 return true
             }
 
             "reset" -> {
                 if (! sender.hasEnderPermission("admin.reset")) return true
-                savedInventory.resetInventory().IOScopeLaunch(code = {
-                    if(it > 0) it.bukkitThreadNotNull {
-                        adminCommandMessage(adminSection, "reset", offlinePlayer!!, sender)
+                savedInventory.resetInventory().IOScopeLaunch(code = { isRemoved ->
+                    if (isRemoved) bukkitThreadNotNull {
+                        adminCommandMessage(adminSection, "reset", offlinePlayer !!, sender)
                     }
                 })
 
                 return true
             }
+
             else -> return true
         }
     }
@@ -248,17 +254,19 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
     /**
      * Сообщения при операциях "open", "close", "clear", "reset" с другим игроком
      */
-    private fun adminCommandMessage(section: ConfigurationSection, category: String, offlinePlayer: OfflinePlayer, sender: CommandSender) {
-        section.getString("$category.owner")?.let {
-            if(offlinePlayer.isOnline) offlinePlayer.player!!.prefixMessage(it.replace("#username#", sender.name))
-        }
-        section.getString("$category.viewer")?.let {
-            sender.prefixMessage(it.replace("#username#", offlinePlayer.name!!))
-        }
+    private fun adminCommandMessage(section: ConfigurationSection, category: String, offlinePlayer: OfflinePlayer, sender: CommandSender
+    ) {
+        if (offlinePlayer.isOnline) section.getStringWithPrefix("$category.owner")
+            ?.replace("#username#", sender.name)
+            ?.sendMessage(offlinePlayer.player)
+
+        section.getStringWithPrefix("$category.viewer")
+            ?.replace("#username#", offlinePlayer.name ?: "")
+            .sendMessage(sender)
     }
 
     private fun sendHelp(sender: CommandSender) {
-        if(!sender.hasEnderPermission("help")) return
+        if (! sender.hasEnderPermission("help")) return
         plugin.getMessagesConfig().getStringList("help").forEach {
             sender.multiMessage(it)
         }
@@ -266,39 +274,33 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
 
     class Completer() : TabCompleter {
 
-        override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<String>): List<String>? {
+        override fun onTabComplete(sender: CommandSender, command: Command, label: String, args: Array<String>
+        ): List<String>? {
             when (args.size) {
                 1 -> {
                     val result = mutableListOf<String>()
 
-                    if(sender.hasPermission("lightenderchest.help") ||
+                    if (sender.hasPermission("lightenderchest.help") ||
                         sender.hasPermission("lightenderchest.admin.*") ||
                         sender.hasPermission("lightenderchest.cache.*") ||
                         sender.hasPermission("lightenderchest.*")) {
                         result += "help"
                     }
-
-                    // Если у sender есть право на reload
                     if (sender.hasPermission("lightenderchest.reload")) {
                         result += "reload"
                     }
-                    // Если может открывать чужие (admin.open) или хотя бы своё (lightenderchest.use)
                     if (sender.hasPermission("lightenderchest.admin.open")) {
                         result += "open"
                     }
-                    // Если может закрывать чужие (admin.close)
                     if (sender.hasPermission("lightenderchest.admin.close")) {
                         result += "close"
                     }
-                    // Если может чистить — либо своё (lightenderchest.clear), либо чужое (admin.clear)
                     if (sender.hasPermission("lightenderchest.clear") || sender.hasPermission("lightenderchest.admin.clear")) {
                         result += "clear"
                     }
-                    // Если может ресетить чужое
                     if (sender.hasPermission("lightenderchest.admin.reset")) {
                         result += "reset"
                     }
-                    // Если есть право на работу с cache
                     if (sender.hasPermission("lightenderchest.cache.refresh") ||
                         sender.hasPermission("lightenderchest.cache.purge") ||
                         sender.hasPermission("lightenderchest.cache.clear") ||
@@ -307,7 +309,6 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                         sender.hasPermission("lightenderchest.cache.data")) {
                         result += "cache"
                     }
-
                     if (sender.hasPermission("lightenderchest.admin.view") ||
                         sender.hasPermission("lightenderchest.admin.open") ||
                         sender.hasPermission("lightenderchest.admin.close") ||
@@ -325,7 +326,6 @@ class EnderCommand(private val plugin: Main) : CommandExecutor {
                     if (args[0].equalsIgnoreCase("cache")) {
                         val subList = mutableListOf<String>()
 
-                        // Проверяем каждую подкоманду cache
                         if (sender.hasPermission("lightenderchest.cache.refresh")) {
                             subList += "refresh"
                         }
@@ -366,9 +366,9 @@ fun CommandSender.hasEnderPermission(permission: String, message: Boolean = true
 
     if (! hasPerm) {
         if (message) {
-            Main.instance.getMessagesConfig().getString("no-permissions")?.replace("#permission#", permissionName)?.let {
-                this.prefixMessage(it)
-            }
+            Main.instance.getMessagesConfig().getStringWithPrefix("no-permissions")
+                ?.replace("#permission#", permissionName)
+                ?.sendMessage(this)
         }
     }
     return hasPerm

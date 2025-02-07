@@ -6,14 +6,12 @@ plugins {
 }
 
 group = "ru.kainlight.lightenderchest"
-version = "1.0.2"
+version = "1.0.3"
 
 val kotlinVersion = "2.1.10"
-val adventureVersion = "4.18.0"
-val adventureBukkitVersion = "4.3.4"
 val hikariCPVersion = "6.2.1"
-val mysqlConnectorVersion = "9.1.0"
-val sqliteVersion = "3.48.0.0"
+val mysqlConnectorVersion = "9.2.0"
+val sqliteVersion = "3.49.0.0"
 
 repositories {
     mavenCentral()
@@ -29,10 +27,7 @@ dependencies {
 
     compileOnly("io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT")
 
-    compileOnly("net.kyori:adventure-api:$adventureVersion")
-    compileOnly("net.kyori:adventure-text-minimessage:$adventureVersion")
     compileOnly("com.zaxxer:HikariCP:$hikariCPVersion")
-
     compileOnly("com.mysql:mysql-connector-j:$mysqlConnectorVersion")
     compileOnly("org.xerial:sqlite-jdbc:$sqliteVersion")
 
@@ -57,8 +52,6 @@ tasks.processResources {
     val props = mapOf(
         "version" to version,
         "kotlinVersion" to kotlinVersion,
-        "adventureVersion" to adventureVersion,
-        "adventureBukkitVersion" to adventureBukkitVersion,
         "hikariCPVersion" to hikariCPVersion,
         "mysqlVersion" to mysqlConnectorVersion,
         "sqliteVersion" to sqliteVersion

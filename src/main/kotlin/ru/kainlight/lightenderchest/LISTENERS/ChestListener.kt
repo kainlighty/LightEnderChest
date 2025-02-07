@@ -75,13 +75,8 @@ class ChestListener() : Listener {
         fun getChest(player: Player?): EnderChest? = this.openedChest.get(player)
 
         private fun getEnderChest(player: Player?): EnderChest? {
-            // Проверяем наличие игрока
             val block = player?.getTargetBlockExact(6) ?: return null
-
-            // Проверяем, что блок — эндер-сундук
             if (! block.isEnderChest()) return null
-
-            // Получаем состояние блока
             val state = block.state as? EnderChest ?: return null
 
             return state

@@ -4,8 +4,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.bukkit.OfflinePlayer
-import org.bukkit.command.CommandSender
-import org.bukkit.entity.Player
+import org.bukkit.configuration.ConfigurationSection
+import org.bukkit.configuration.file.FileConfiguration
 import ru.kainlight.lightenderchest.COMMANDS.EnderCommand
 import ru.kainlight.lightenderchest.DATA.Database
 import ru.kainlight.lightenderchest.ECONOMY.EconomyType
@@ -19,7 +19,6 @@ import ru.kainlight.lightlibrary.UTILS.Init
 import ru.kainlight.lightlibrary.UTILS.Parser
 import ru.kainlight.lightlibrary.UTILS.bukkitThread
 import ru.kainlight.lightlibrary.equalsIgnoreCase
-import ru.kainlight.lightlibrary.multiMessage
 
 class Main : LightPlugin() {
 
@@ -27,7 +26,8 @@ class Main : LightPlugin() {
     lateinit var enderChestConfig: LightConfig
     lateinit var dataChestConfig: LightConfig
 
-    var debugIsEnabled: Boolean = false
+    internal var debugIsEnabled: Boolean = false
+    internal var MESSAGE_PREFIX: String = ""
 
     override fun onLoad() {
         this.saveDefaultConfig()
@@ -106,21 +106,18 @@ class Main : LightPlugin() {
     }
 }
 
-private var MESSAGE_PREFIX: String = ""
+// --------------------------------------- //
 
-fun Player.prefixMessage(text: String?, vararg replace: Pair<String, Any?>): Player {
-    if(text == null) return this
-    val text = if(Parser.parseMode.equalsIgnoreCase("MINIMESSSAGE")) text.plus("<reset>") else text
-    this.multiMessage(text.replace("#prefix#", MESSAGE_PREFIX), replace = replace)
-
-    return this
+fun FileConfiguration.getStringWithPrefix(path: String): String? {
+    var text = this.getString(path)?.replace("#prefix#", Main.instance.MESSAGE_PREFIX)
+    text = if(Parser.parseMode.equalsIgnoreCase("MINIMESSSAGE")) text.plus("<reset>") else text
+    return text
 }
-fun CommandSender.prefixMessage(text: String?, vararg replace: Pair<String, Any?>): CommandSender {
-    if(text == null) return this
-    val text = if(Parser.parseMode.equalsIgnoreCase("MINIMESSSAGE")) text.plus("<reset>") else text
-    this.multiMessage(text.replace("#prefix#", MESSAGE_PREFIX), replace = replace)
 
-    return this
+fun ConfigurationSection.getStringWithPrefix(path: String): String? {
+    var text = this.getString(path)?.replace("#prefix#", Main.instance.MESSAGE_PREFIX)
+    text = if(Parser.parseMode.equalsIgnoreCase("MINIMESSSAGE")) text.plus("<reset>") else text
+    return text
 }
 
 fun OfflinePlayer?.isNull(): Boolean {

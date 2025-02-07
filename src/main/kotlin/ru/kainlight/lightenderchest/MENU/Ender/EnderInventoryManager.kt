@@ -11,37 +11,36 @@ import org.bukkit.inventory.ItemStack
 import ru.kainlight.lightenderchest.DATA.Database
 import ru.kainlight.lightenderchest.LISTENERS.ChestListener
 import ru.kainlight.lightenderchest.Main
+import ru.kainlight.lightenderchest.getStringWithPrefix
 import ru.kainlight.lightenderchest.info
 import ru.kainlight.lightenderchest.isNull
-import ru.kainlight.lightenderchest.prefixMessage
 import ru.kainlight.lightlibrary.BUILDERS.InventoryBuilder
 import ru.kainlight.lightlibrary.BUILDERS.ItemBuilder
 import ru.kainlight.lightlibrary.UTILS.IOScope
 import ru.kainlight.lightlibrary.UTILS.Parser
+import ru.kainlight.lightlibrary.sendMessage
 import ru.kainlight.lightlibrary.sound
 
 class EnderInventoryManager(private val username: String) {
 
     fun createInventory(fillBlockedItems: Boolean = true): Inventory {
         val holder = EnderInventoryHolder()
-        val blockedItems = blockedItems
 
         val title = Main.instance.enderChestConfig.getConfig().getString("inventory.title", InventoryType.ENDER_CHEST.name)!!
-        val size = totalSize
-        val inventoryBuilder = InventoryBuilder(Main.instance, Parser.mini(title), holder, size, true)
+        val inventoryBuilder = InventoryBuilder(Main.instance, Parser.mini(title), holder, totalSize, true)
 
         if(fillBlockedItems) {
-            for (i in 0 until size) {
+            for (i in 0 until totalSize) {
                 inventoryBuilder.setItem(i, blockedItems[i])
             }
         }
 
         val builtInventory = inventoryBuilder.build()
-
         holder.setInventory(builtInventory)
 
-        inventoryBuilder.clickEvent { event -> this.clickInventoryEvent(event) }
-        inventoryBuilder.closeEvent { event -> this.closeInventoryEvent(event) }
+        inventoryBuilder
+            .clickEvent { event -> this.clickInventoryEvent(event) }
+            .closeEvent { event -> this.closeInventoryEvent(event) }
 
         return builtInventory
     }
@@ -56,9 +55,8 @@ class EnderInventoryManager(private val username: String) {
         val replacedInventoryOwnerName = arrayOf("#username#" to inventoryOwnerName)
 
         if (hasViewer && !(viewer.hasPermission("lightenderchest.admin.edit") || viewer.hasPermission("lightenderchest.admin.edit.$inventoryOwnerName"))) {
-            inventoriesConfig.getString("admin.no-access.edit")?.let {
-                viewer.prefixMessage(it, replace = replacedInventoryOwnerName)
-            }
+            inventoriesConfig.getStringWithPrefix("admin.no-access.edit")
+                .sendMessage(viewer, replace = replacedInventoryOwnerName)
             event.isCancelled = true
             return
         }
@@ -77,16 +75,16 @@ class EnderInventoryManager(private val username: String) {
                 viewer.moveOrDropItemByCloseSlot(currentItem)
                 enderInventory.closeSlot(slot)
             } else {
-                Main.instance.getMessagesConfig().getString("no-permissions")?.replace("#permission#", "lightenderchest.admin.refund")?.let {
-                    viewer.prefixMessage(it)
-                }
+                Main.instance.getMessagesConfig().getStringWithPrefix("no-permissions")
+                    ?.replace("#permission#", "lightenderchest.admin.refund")
+                    ?.sendMessage(viewer)
             }
             return
         }
 
         if(currentItem == null) return
         if (!hasBlockedItem) return
-        if (!viewer.itemOnCursor.isEmpty || event.isShiftClick || !event.isLeftClick) {
+        if (viewer.itemOnCursor.isNotEmpty() || event.isShiftClick || !event.isLeftClick) {
             event.isCancelled = true
             return
         }
@@ -96,9 +94,8 @@ class EnderInventoryManager(private val username: String) {
         if (!isFree && hasViewer) {
             event.isCancelled = true
             viewer.inventorySound("failed")
-            inventoriesConfig.getString("admin.no-access.buy")?.let {
-                viewer.prefixMessage(it, replace = replacedInventoryOwnerName)
-            }
+            inventoriesConfig.getStringWithPrefix("admin.no-access.buy")
+                .sendMessage(viewer, replace = replacedInventoryOwnerName)
             return
         }
 
@@ -110,8 +107,14 @@ class EnderInventoryManager(private val username: String) {
 
         event.isCancelled = true
         if(balance >= doubleSlotCost || isFree) {
-            if (economyManager.withdraw(viewer, slot, slotCost, isFree)) {
+            if (economyManager.withdraw(viewer, slotCost, isFree)) {
                 if (enderInventory.openSlot(slot)) {
+                    val slot = slot + 1
+                    inventoriesConfig.getStringWithPrefix("buy.purchased")!!
+                        .replace("#slot#", slot.toString())
+                        .replace("#price#", slotCost.toString())
+                        .sendMessage(viewer)
+
                     viewer.inventorySound("successfully")
                     return
                 }
@@ -119,13 +122,14 @@ class EnderInventoryManager(private val username: String) {
             viewer.inventorySound("failed")
             return
         } else {
+            val calculateNeedMoney = doubleSlotCost - balance
+            val isPrecision = Main.instance.enderChestConfig.getConfig().getInt("precision") <= 0
+            val needToBuy = if(isPrecision) calculateNeedMoney.toInt() else calculateNeedMoney.toDouble()
+
             viewer.inventorySound("failed")
-            inventoriesConfig.getString("buy.not-enough-money")?.let {
-                val calculateNeedMoney = doubleSlotCost - balance
-                val isPrecision = Main.instance.enderChestConfig.getConfig().getInt("precision") <= 0
-                val needToBuy = if(isPrecision) calculateNeedMoney.toInt() else calculateNeedMoney.toDouble()
-                viewer.prefixMessage(it.replace("#price#", needToBuy.toString()))
-            }
+            inventoriesConfig.getStringWithPrefix("buy.not-enough-money")
+                ?.replace("#price#", needToBuy.toString())
+                .sendMessage(viewer)
             return
         }
     }
@@ -147,12 +151,12 @@ class EnderInventoryManager(private val username: String) {
     }
 
     private fun Player.moveOrDropItemByCloseSlot(currentItem: ItemStack?) {
-        currentItem?.let { itemStack ->
-            val leftover = this.inventory.addItem(itemStack)
-            if (leftover.isNotEmpty()) {
-                leftover.values.forEach { leftoverStack ->
-                    this.world.dropItem(this.location, leftoverStack)
-                }
+        if(currentItem == null) return
+
+        val leftover = this.inventory.addItem(currentItem)
+        if (leftover.isNotEmpty()) {
+            leftover.values.forEach { leftoverStack ->
+                this.world.dropItem(this.location, leftoverStack)
             }
         }
     }
@@ -161,11 +165,14 @@ class EnderInventoryManager(private val username: String) {
         val soundSection = Main.instance.enderChestConfig.getConfig().getConfigurationSection("inventory.sound") !!
         val soundVolume = soundSection.getDouble("volume").toFloat()
         val soundPitch = soundSection.getDouble("pitch").toFloat()
+
         soundSection.getString(soundName).takeIf { !it.isNullOrBlank() }.let {
             info("Played sound $soundPitch for ${this.name}")
             this.sound(it, soundVolume, soundPitch)
         }
     }
+
+    private fun ItemStack.isNotEmpty(): Boolean = !(type.isAir || amount <= 0)
 
     companion object {
         val totalSize: Int = Main.instance.enderChestConfig.getConfig().getInt("inventory.size", 54).coerceIn(8, 54)
@@ -178,14 +185,10 @@ class EnderInventoryManager(private val username: String) {
             val glowing = blockedItemSection.getBoolean("glow", false)
 
             return@lazy (0 until totalSize).map { index ->
-                // Вычисляем цену для текущего слота
                 val price = Main.instance.economyManager.calculateCostForSlot(index)
-
                 val name = blockedItemSection.getString("name", "")!!.replace("#price#", price.toString())
-                // Заменяем плейсхолдер #cost# на вычисленную цену
                 val replacedLore = loreTemplate.map { it.replace("#cost#", price.toString()) }
 
-                // Создаём предмет для текущего слота
                 ItemBuilder(materialName)
                     .displayName(name)
                     .lore(*replacedLore.toTypedArray())

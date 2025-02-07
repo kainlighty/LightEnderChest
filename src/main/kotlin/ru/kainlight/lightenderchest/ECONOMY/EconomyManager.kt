@@ -3,7 +3,6 @@ package ru.kainlight.lightenderchest.UTILS
 import org.bukkit.entity.Player
 import ru.kainlight.lightenderchest.ECONOMY.EconomyType
 import ru.kainlight.lightenderchest.Main
-import ru.kainlight.lightenderchest.prefixMessage
 import ru.kainlight.lightlibrary.API.ECONOMY.LightEconomy
 import kotlin.math.pow
 import kotlin.math.round
@@ -14,24 +13,14 @@ class EconomyManager(val plugin: Main, val economy: EconomyType) {
         LightEconomy.init(economy.name.lowercase())
     }
 
-    fun withdraw(player: Player, slot: Int, cost: Number, isFree: Boolean = false): Boolean {
+    fun withdraw(player: Player, cost: Number, isFree: Boolean = false): Boolean {
         val doubleCost = cost.toDouble()
-        val isDeposited = if(isFree) true else when (economy) {
+        val isPurchased = if(isFree) true else when (economy) {
             EconomyType.VAULT -> LightEconomy.VAULT?.withdraw(player, doubleCost) ?: false
             EconomyType.PLAYERPOINTS -> LightEconomy.POINTS?.withdraw(player, doubleCost) ?: false
         }
 
-        if (isDeposited) {
-            plugin.getMessagesConfig().getString("inventories.buy.purchased")?.let {
-                val slot = slot + 1
-                player.prefixMessage(it, replace = arrayOf(
-                    "#slot#" to slot,
-                    "#price#" to cost
-                ))
-            }
-        }
-
-        return isDeposited
+        return isPurchased
     }
 
     fun getBalance(player: Player): Double {

@@ -16,17 +16,18 @@ import ru.kainlight.lightenderchest.DATA.Database
 import ru.kainlight.lightenderchest.LISTENERS.ChestListener
 import ru.kainlight.lightenderchest.MENU.Ender.EnderInventory
 import ru.kainlight.lightenderchest.Main
-import ru.kainlight.lightenderchest.prefixMessage
+import ru.kainlight.lightenderchest.getStringWithPrefix
 import ru.kainlight.lightlibrary.BUILDERS.InventoryBuilder
 import ru.kainlight.lightlibrary.BUILDERS.ItemBuilder
 import ru.kainlight.lightlibrary.multiMessage
+import ru.kainlight.lightlibrary.sendMessage
 
 class DataInventoryManager(val plugin: Main, val player: Player) {
 
     companion object {
         private val regularSlots = (0..44).toList() // Слоты с игроками
-        private val specialSlots = arrayOf(45, 46, 47, 48, 49, 50, 51, 52, 53) // Специальные слоты (функциональные и пустые)
         private val itemsPerPage = regularSlots.size
+        private val specialSlots = arrayOf(45, 46, 47, 48, 49, 50, 51, 52, 53) // Специальные слоты (функциональные и пустые)
     }
 
     fun open(pageIndex: Int = 0) {
@@ -60,17 +61,7 @@ class DataInventoryManager(val plugin: Main, val player: Player) {
             val displayName = section.getString("name")
             val material = section.getString("material") ?: "COMPASS"
             val isGlowing = section.getBoolean("glow", false)
-
-            val stats = Database.Cache.getStats()
-            val lore = section.getStringList("lore").map {
-                it.replace("#hitCount#", stats.hitCount().toString())
-                    .replace("#missCount#", stats.missCount().toString())
-                    .replace("#requestCount#", stats.requestCount().toString())
-                    .replace("#evictionCount#", stats.evictionCount().toString())
-                    .replace("#averageLoadPenalty#", stats.averageLoadPenalty().toLong().toString())
-                    .replace("#loadSuccessCount#", stats.loadSuccessCount().toString())
-                    .replace("#loadFailureCount#", stats.loadFailureCount().toString())
-            }
+            val lore = this.getDataLore()
 
             val statisticItem = ItemBuilder(material)
                 .displayName(displayName)
@@ -145,16 +136,7 @@ class DataInventoryManager(val plugin: Main, val player: Player) {
 
             // Statistics
             49 -> {
-                val stats = Database.Cache.getStats()
-                plugin.dataChestConfig.getConfig().getStringList("items.statistics.lore").map {
-                    it.replace("#hitCount#", stats.hitCount().toString())
-                        .replace("#missCount#", stats.missCount().toString())
-                        .replace("#requestCount#", stats.requestCount().toString())
-                        .replace("#evictionCount#", stats.evictionCount().toString())
-                        .replace("#averageLoadPenalty#", stats.averageLoadPenalty().toLong().toString())
-                        .replace("#loadSuccessCount#", stats.loadSuccessCount().toString())
-                        .replace("#loadFailureCount#", stats.loadFailureCount().toString())
-                }.forEach {
+                this.getDataLore().forEach {
                     player.multiMessage(it)
                 }
             }
@@ -183,15 +165,13 @@ class DataInventoryManager(val plugin: Main, val player: Player) {
 
                     // Teleport to last opened enderchest
                     ClickType.MIDDLE -> {
-                        val player = plugin.server.getPlayerExact(username)
-                        val chest = ChestListener.getChest(player)
-                        if (chest == null) {
-                            plugin.getMessagesConfig().getString("cache.chest-not-found")?.let {
-                                this.player.prefixMessage(it.replace("#username#", username))
-                            }
-                            return
-                        } else {
-                            this.player.teleport(chest.location)
+                        val chestOwner = plugin.server.getPlayerExact(username)
+                        ChestListener.getChest(chestOwner)?.let { chest ->
+                            player.teleport(chest.location)
+                        } ?: run {
+                            plugin.getMessagesConfig().getStringWithPrefix("cache.chest-not-found")
+                                ?.replace("#username#", username)
+                                ?.sendMessage(player)
                         }
                     }
 
@@ -204,10 +184,10 @@ class DataInventoryManager(val plugin: Main, val player: Player) {
                     // Delete cached inventory
                     ClickType.DROP -> {
                         Database.Cache.remove(username)
-                        plugin.getMessagesConfig().getString("cache.clear")?.let {
-                            player.prefixMessage(it)
-                            open(pageIndex)
-                        }
+                        open(pageIndex)
+
+                        plugin.getMessagesConfig().getStringWithPrefix("cache.clear")
+                            .sendMessage(player)
                         return
                     }
 
@@ -227,10 +207,7 @@ class DataInventoryManager(val plugin: Main, val player: Player) {
 
         val section = Main.instance.dataChestConfig.getConfig().getConfigurationSection("items.players") !!
         val color = section.getString("name-color")
-        println(color)
         val style = Style.style().color(usernameColor(color)).decoration(TextDecoration.ITALIC, false).build()
-        println(usernameColor(color))
-        println(style)
         val displayName = Component.text(playerName, style)
 
         val lore = section.getStringList("lore").map {
@@ -239,14 +216,12 @@ class DataInventoryManager(val plugin: Main, val player: Player) {
                 .replace("#itemsCount#", inventory.getValidItemCount().toString())
         }
 
-        val builder = ItemBuilder(Material.PLAYER_HEAD)
+        return ItemBuilder(Material.PLAYER_HEAD)
             .displayName(displayName)
             .lore(*lore.toTypedArray())
             .skullOwner(offlinePlayer)
             .defaultFlags()
             .build()
-
-        return builder
     }
 
     fun ItemStack.getCleanDisplayName(): String {
@@ -279,6 +254,19 @@ class DataInventoryManager(val plugin: Main, val player: Player) {
             "yellow" -> NamedTextColor.YELLOW
             "white" -> NamedTextColor.WHITE
             else -> NamedTextColor.YELLOW
+        }
+    }
+
+    private fun getDataLore(): List<String> {
+        val stats = Database.Cache.getStats()
+        return plugin.dataChestConfig.getConfig().getStringList("items.statistics.lore").map {
+            it.replace("#hitCount#", stats.hitCount().toString())
+                .replace("#missCount#", stats.missCount().toString())
+                .replace("#requestCount#", stats.requestCount().toString())
+                .replace("#evictionCount#", stats.evictionCount().toString())
+                .replace("#averageLoadPenalty#", stats.averageLoadPenalty().toLong().toString())
+                .replace("#loadSuccessCount#", stats.loadSuccessCount().toString())
+                .replace("#loadFailureCount#", stats.loadFailureCount().toString())
         }
     }
 }
